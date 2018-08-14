@@ -83,3 +83,86 @@ def set_good_defaults(figure_style="seaborn-whitegrid"):
     mpl.rcParams['legend.fancybox'] = True
     mpl.rcParams['legend.framealpha'] = 0.8
     mpl.rcParams['legend.frameon'] = True
+
+
+def plot_sampled_functions(data,
+                           x,
+                           phi,
+                           dist,
+                           map_model,
+                           num_samples,
+                           mle_model=None,
+                           color=None):
+    colors = tableu20_color_table()
+    plt.plot(data.good.phi, data.good.y, '.', markersize=15, color=color)
+    plt.plot(
+        data.bad.phi, data.bad.y, '.', markersize=15, color=color, alpha=0.2)
+
+    line_styles = line_style_table()
+
+    legends = ['observed (noise removed)', 'unobserved', 'MAP']
+
+    plt.plot(
+        x,
+        map_model.predict(phi),
+        color=next(colors),
+        linestyle=next(line_styles),
+        linewidth=2)
+
+    if mle_model is not None:
+        plt.plot(
+            x,
+            mle_model.predict(phi),
+            color=next(colors),
+            linestyle=next(line_styles),
+            linewidth=2)
+        legends.append('MLE')
+
+    for lm in dist.sample(num_samples):
+        plt.plot(
+            x,
+            lm.predict(phi),
+            color=next(colors),
+            linestyle=next(line_styles),
+            linewidth=2)
+
+    plt.legend(legends)
+    return plt
+
+
+def plot_policy(x, policy, colors):
+    plt.stackplot(x, policy.T, colors=colors)
+    plt.xlabel('feature')
+    plt.ylabel('cumulative weight')
+    plt.margins(0, 0)
+    return plt
+
+
+def plot_reward_across_features(x, methods):
+    for name, method in methods.items():
+        plt.plot(x, method['evs'], linewidth=2, label=name, **method['style'])
+    plt.xlabel('feature')
+    plt.ylabel('expected reward')
+    if len(methods) > 1:
+        plt.legend()
+    return plt
+
+
+class NamedStyles(object):
+    def __init__(self):
+        self.data = {}
+        self._line_styles = line_style_table()
+        self._colors = tableu20_color_table()
+
+    def add(self, name):
+        if name not in self.data:
+            self.data[name] = {
+                'linestyle': next(self._line_styles),
+                'color': next(self._colors)
+            }
+        return self
+
+    def __getitem__(self, name):
+        if name not in self.data:
+            self.add(name)
+        return self.data[name]
