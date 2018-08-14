@@ -145,6 +145,12 @@ class NamedResults(object):
         self.style = style
         self.area = area
 
+    def percentile_normalization(self):
+        return self.num_evs() / 100.0
+
+    def percentile_points(self):
+        return np.arange(self.num_evs()) / self.percentile_normalization()
+
     def num_evs(self):
         return len(self.evs)
 
@@ -154,15 +160,15 @@ class NamedResults(object):
     def min_ev(self):
         return min(self.evs)
 
-    def fill_beneath(self, min_ev=None):
+    def area_beneath(self, min_ev=None):
         if min_ev is None:
             min_ev = self.min_ev()
         lb, ub = self.area
         lb_frac = int(np.ceil(self.num_evs() * lb))
         ub_frac = int(np.ceil(self.num_evs() * ub))
 
-        width = np.arange(lb_frac, ub_frac) / (self.num_evs() / 100)
-        lb = np.full([ub_frac - lb_frac], min_ev),
+        width = np.arange(lb_frac, ub_frac) / self.percentile_normalization()
+        lb = np.full([ub_frac - lb_frac], min_ev)
         ub = self.evs[lb_frac:ub_frac]
         return width, lb, ub
 
@@ -198,3 +204,45 @@ class NamedStyles(object):
 
     def clone(self, name):
         return deepcopy(self[name])
+
+
+def plot_percentile_performance(methods, baseline=None):
+    plt.close()
+    fig = plt.figure()
+
+    if baseline in methods:
+        inv_cdf_plot = plt.subplot(2, 1, 1)
+        diff_plot = plt.subplot(2, 1, 2, sharex=inv_cdf_plot)
+        axes = [inv_cdf_plot, diff_plot]
+    else:
+        inv_cdf_plot = plt.subplot(1, 1, 1)
+        axes = [inv_cdf_plot]
+
+    min_ev = min([method.min_ev() for method in methods.values()])
+
+    for name, method in methods.items():
+        x = method.percentile_points()
+        inv_cdf_plot.plot(
+            x, method.evs, label=name, linewidth=2, **method.style)
+        if 'area' in method:
+            inv_cdf_plot.fill_between(*method.area_beneath(min_ev),
+                                      **method.style)
+        inv_cdf_plot.set_ylabel('value')
+
+        if baseline in methods:
+            ev_diff = method.evs - methods[baseline]['evs']
+            diff_plot.plot(
+                x, ev_diff, label=name, linewidth=2, **method['style'])
+
+    if baseline in methods:
+        diff_plot.set_xlabel('percentile')
+        diff_plot.set_ylabel('value compared to {}'.format(baseline))
+        inv_cdf_plot.get_xaxis().set_visible(False)
+    else:
+        inv_cdf_plot.set_xlabel('percentile')
+
+    if len(methods) > 1:
+        handles, labels = inv_cdf_plot.get_legend_handles_labels()
+        fig.legend(handles, labels, loc='upper center')
+    plt.margins(0, 0)
+    return axes
