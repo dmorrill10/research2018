@@ -32,6 +32,7 @@ class PlateauFunction(object):
         return y
 
     def in_bounds(self, x):
+        x = x.squeeze()
         in_bounds = np.full(x.shape, False)
         for i in range(len(self.x_bounds)):
             x_min, x_max = self.x_bounds[i]
