@@ -278,7 +278,7 @@ class KofnRrmpLearner(KofnRrmLearner):
     def loss(self, predictions, policy, kofn_utility):
         pi = rm_policy(predictions)
         inst_r = kofn_utility - utility(pi, kofn_utility)
-        diff = predictions - tf.stop_gradient(tf.minimum(inst_r, predictions))
+        diff = predictions - tf.stop_gradient(tf.maximum(inst_r, predictions))
         return tf.reduce_mean(tf.reduce_sum(tf.square(diff), axis=1))
 
     def method_name(self):
