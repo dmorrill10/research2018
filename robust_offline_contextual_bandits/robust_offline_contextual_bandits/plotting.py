@@ -246,3 +246,26 @@ def plot_percentile_performance(methods, baseline=None):
         fig.legend(handles, labels, loc='upper center')
     plt.margins(0, 0)
     return axes
+
+
+def plot_policies(kofn_learners, phi, x, action_colors, num_rows=1):
+    num_columns = int(np.ceil(len(kofn_learners) / num_rows))
+    fig, axes_list = plt.subplots(
+        num_rows, num_columns, sharex=True, sharey=True)
+    for i in range(len(kofn_learners)):
+        policy = kofn_learners[i].policy(phi).numpy()
+
+        if len(kofn_learners) < 2:
+            axes = axes_list
+        elif num_rows > 1 and num_columns > 1:
+            r = i // num_columns
+            c = i % num_columns
+            axes = axes_list[r][c]
+        else:
+            axes = axes_list[i]
+
+        plt.sca(axes)
+        plot_policy(x, policy, action_colors)
+        plt.title('{}'.format(kofn_learners[i]))
+    plt.tight_layout()
+    return fig, axes_list
