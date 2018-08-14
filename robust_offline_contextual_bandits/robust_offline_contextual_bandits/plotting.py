@@ -224,7 +224,7 @@ def plot_percentile_performance(methods, baseline=None):
         x = method.percentile_points()
         inv_cdf_plot.plot(
             x, method.evs, label=name, linewidth=2, **method.style)
-        if 'area' in method:
+        if method.show_area():
             inv_cdf_plot.fill_between(*method.area_beneath(min_ev),
                                       **method.style)
         inv_cdf_plot.set_ylabel('value')
