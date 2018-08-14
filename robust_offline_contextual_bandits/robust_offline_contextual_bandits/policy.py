@@ -11,3 +11,11 @@ def greedy_policy(rewards):
         policy[a_better] = a
         value[a_better] = y[a_better]
     return tf.one_hot(policy, rewards.shape[1])
+
+
+def sorted_values_across_worlds(policy, sampled_rewards):
+    v = np.mean(
+        np.mean(sampled_rewards * np.expand_dims(policy, axis=-1), axis=1),
+        axis=0)
+    v.sort()
+    return v
