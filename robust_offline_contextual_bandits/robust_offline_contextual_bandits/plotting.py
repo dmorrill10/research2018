@@ -173,9 +173,9 @@ class NamedResults(object):
         return width, lb, ub
 
 
-def plot_reward_across_features(x, methods):
+def plot_reward_across_inputs(x, methods):
     for name, method in methods.items():
-        plt.plot(x, method['evs'], linewidth=2, label=name, **method['style'])
+        plt.plot(x, method.evs, linewidth=2, label=name, **method.style)
     plt.xlabel('feature')
     plt.ylabel('expected reward')
     if len(methods) > 1:
