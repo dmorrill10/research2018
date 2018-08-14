@@ -230,9 +230,8 @@ def plot_percentile_performance(methods, baseline=None):
         inv_cdf_plot.set_ylabel('value')
 
         if baseline in methods:
-            ev_diff = method.evs - methods[baseline]['evs']
-            diff_plot.plot(
-                x, ev_diff, label=name, linewidth=2, **method['style'])
+            ev_diff = method.evs - methods[baseline].evs
+            diff_plot.plot(x, ev_diff, label=name, linewidth=2, **method.style)
 
     if baseline in methods:
         diff_plot.set_xlabel('percentile')
