@@ -55,3 +55,8 @@ def new_ff_policy_model(num_actions,
                 activation=output_activation)
         ]
     return tf.keras.Sequential(layers)
+
+
+def softmax(x, *args, temp=1.0, **kwargs):
+    x /= temp
+    return tf.nn.softmax(x - tf.reduce_max(x, axis=1, keepdims=True))
