@@ -105,3 +105,13 @@ class Gp(object):
             m, v = (self.gp.normalizer.inverse_mean(m),
                     self.gp.normalizer.inverse_variance(v))
         return GpAtInputs(m, v, bias=self.bias)
+
+
+def sample_reward_tensors_from_gp_function(num_worlds, phi, gp_models):
+    gps_at_inputs = [model.at_inputs(phi) for model in gp_models]
+
+    def f(n=num_worlds):
+        return tf.transpose(
+            tf.stack([model(size=n) for model in gps_at_inputs]), [1, 0, 2])
+
+    return f
