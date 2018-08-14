@@ -2,7 +2,7 @@ import tensorflow as tf
 import numpy as np
 
 
-def enable_eager(self):
+def enable_eager():
     try:
         tf.enable_eager_execution()
     except:
