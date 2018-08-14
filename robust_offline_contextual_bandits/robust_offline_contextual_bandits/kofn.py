@@ -311,6 +311,7 @@ class KofnTrainer(object):
             loss, grad = learner.loss_and_grad(inputs, reward)
             losses.append(loss)
             learner.apply(grad)
+        self._t.assign_add(1)
         return losses
 
     def evaluate(self, inputs, test_rewards):
