@@ -13,3 +13,9 @@ def enable_eager(self):
 def reset_random(seed=42):
     tf.set_random_seed(seed)
     np.random.seed(seed)
+
+
+def huber(y, knot=1.0):
+    abs_y = tf.abs(y)
+    return tf.where(
+        tf.greater(abs_y, knot), 2 * knot * (abs_y - knot), tf.square(y))
