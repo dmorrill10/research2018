@@ -229,7 +229,7 @@ class KofnRrmLearner(KofnMetaRmpLearner):
         return 'RRM-{}'.format(self.template.label())
 
 
-class KofnSplitRrmLearner(KofnRrmLearner):
+class KofnSplitRrmLearner(KofnMetaRmpLearner):
     '''Should be better than RRM in some cases but haven't seen it yet.'''
 
     def __init__(self,
@@ -247,12 +247,7 @@ class KofnSplitRrmLearner(KofnRrmLearner):
                 )
             )
         )  # yapf:disable
-        super(KofnSplitRrmLearner, self).__init__(
-            policies,
-            *args,
-            softmax_temperatures=softmax_temperatures,
-            use_cumulative_values=use_cumulative_values,
-            **kwargs)
+        super(KofnSplitRrmLearner, self).__init__(policies, *args, **kwargs)
 
     def regrets(self, inputs):
         z = self.model(inputs)
@@ -275,6 +270,19 @@ class KofnSplitRrmLearner(KofnRrmLearner):
 
     def method_name(self):
         return 'SRRM-{}'.format(self.template.label())
+
+
+class KofnRrmpLearner(KofnRrmLearner):
+    '''With a tabular representation, this reduces to RM+.'''
+
+    def loss(self, predictions, policy, kofn_utility):
+        pi = rm_policy(predictions)
+        inst_r = kofn_utility - utility(pi, kofn_utility)
+        diff = predictions - tf.stop_gradient(tf.minimum(inst_r, predictions))
+        return tf.reduce_mean(tf.reduce_sum(tf.square(diff), axis=1))
+
+    def method_name(self):
+        return 'RRM+-{}'.format(self.template.label())
 
 
 class KofnIterator(object):
