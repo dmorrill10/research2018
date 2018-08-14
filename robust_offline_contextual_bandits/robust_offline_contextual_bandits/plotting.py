@@ -1,3 +1,4 @@
+from copy import deepcopy
 from itertools import cycle
 import numpy as np
 import matplotlib as mpl
@@ -138,6 +139,34 @@ def plot_policy(x, policy, colors):
     return plt
 
 
+class NamedResults(object):
+    def __init__(self, evs, style, area=None):
+        self.evs = evs
+        self.style = style
+        self.area = area
+
+    def num_evs(self):
+        return len(self.evs)
+
+    def show_area(self):
+        return self.area is not None
+
+    def min_ev(self):
+        return min(self.evs)
+
+    def fill_beneath(self, min_ev=None):
+        if min_ev is None:
+            min_ev = self.min_ev()
+        lb, ub = self.area
+        lb_frac = int(np.ceil(self.num_evs() * lb))
+        ub_frac = int(np.ceil(self.num_evs() * ub))
+
+        width = np.arange(lb_frac, ub_frac) / (self.num_evs() / 100)
+        lb = np.full([ub_frac - lb_frac], min_ev),
+        ub = self.evs[lb_frac:ub_frac]
+        return width, lb, ub
+
+
 def plot_reward_across_features(x, methods):
     for name, method in methods.items():
         plt.plot(x, method['evs'], linewidth=2, label=name, **method['style'])
@@ -166,3 +195,6 @@ class NamedStyles(object):
         if name not in self.data:
             self.add(name)
         return self.data[name]
+
+    def clone(self, name):
+        return deepcopy(self[name])
