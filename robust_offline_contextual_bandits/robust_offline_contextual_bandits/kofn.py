@@ -1,4 +1,5 @@
 import tensorflow as tf
+from tensorflow.python.ops.resource_variable_ops import ResourceVariable
 from tf_kofn_robust_policy_optimization.robust.kofn import ContextualKofnGame
 from tf_contextual_prediction_with_expert_advice import rm_policy, utility
 from tf_contextual_prediction_with_expert_advice.rrm import rrm_loss
@@ -135,7 +136,8 @@ class KofnMetaRmpLearner(KofnLearner):
     def __init__(self, policies, *args, use_cumulative_values=False, **kwargs):
         super(KofnMetaRmpLearner, self).__init__(*args, **kwargs)
         self.policies = policies
-        self.meta_qregrets = tf.zeros([len(policies), 1])
+        self.meta_qregrets = ResourceVariable(
+            tf.zeros([len(policies), 1]), trainable=False)
         self.use_cumulative_values = use_cumulative_values
 
     def num_policies(self):
