@@ -1,3 +1,4 @@
+import tensorflow as tf
 from robust_offline_contextual_bandits.plotting import tableu20_color_table
 
 
@@ -43,9 +44,14 @@ class ArmsWithContexts(object):
     def __getitem__(self, action):
         return self.components_for_training[action]
 
-    def combined_raw_y(self, action):
-        si = self[action].sort_indices
-        return self[action].combined_raw_data.y.numpy()[si, :]
+    def combined_raw_y(self, action=None):
+        if action is None:
+            return tf.concat(
+                [self.combined_raw_y(a) for a in range(self.num_arms())],
+                axis=1)
+        else:
+            si = self[action].sort_indices
+            return self[action].combined_raw_data.y.numpy()[si, :]
 
     def num_contexts(self):
         return len(self.x)
