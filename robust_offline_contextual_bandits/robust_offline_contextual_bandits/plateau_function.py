@@ -5,6 +5,26 @@ from tf_supervised_inference.data import Data, NamedDataSets
 
 class PlateauFunction(object):
     @classmethod
+    def sample_from_bounds_and_averages(cls, x_min, x_max, avg_num_plateaus,
+                                        avg_num_points_per_plateau,
+                                        function_outside_plateaus):
+        stddev = np.abs(x_max - x_min)
+        cluster_stddev = stddev / 20.0
+        num_plateaus = int(
+            np.ceil(np.abs(np.random.normal(avg_num_plateaus, stddev))))
+        heights = np.random.normal(0.0, size=[num_plateaus])
+        midpoints = np.random.uniform(x_min, x_max, size=[num_plateaus])
+        num_points_per_plateau = max(
+            2,
+            int(
+                np.ceil(
+                    np.abs(
+                        np.random.normal(avg_num_points_per_plateau,
+                                         stddev)))))
+        return cls.sample(midpoints, heights, num_points_per_plateau,
+                          cluster_stddev, function_outside_plateaus)
+
+    @classmethod
     def sample(cls, centers, heights, num_points_per_plateau, cluster_stddev,
                function_outside_plateaus):
         x_clusters = [
