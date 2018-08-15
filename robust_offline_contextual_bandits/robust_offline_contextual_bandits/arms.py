@@ -48,3 +48,7 @@ class ArmsWithContexts(object):
     def with_function_outside_plateaus(self, f):
         return self.__class__(
             self.arms.with_function_outside_plateaus(f), self.x, self.stddev)
+
+    def training_components_from_each_arm(self):
+        for a in range(self.num_arms()):
+            yield a, self[a]

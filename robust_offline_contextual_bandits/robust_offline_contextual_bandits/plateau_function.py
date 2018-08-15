@@ -15,7 +15,7 @@ class PlateauFunction(object):
         heights = np.random.normal(0.0, size=[num_plateaus])
         midpoints = np.random.uniform(x_min, x_max, size=[num_plateaus])
         num_points_per_plateau = max(
-            2,
+            1,
             int(
                 np.ceil(
                     np.abs(
