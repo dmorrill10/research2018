@@ -323,7 +323,7 @@ class KofnTrainer(object):
         self._t.assign_add(1)
         return losses
 
-    def evaluate(self, inputs, test_rewards):
+    def evaluate(self, inputs, test_rewards=None):
         evs = []
         test_evs = []
         _r = self.reward_generator(inputs)
@@ -331,7 +331,12 @@ class KofnTrainer(object):
             game = learner(inputs, _r)
 
             evs.append(game.root_ev.numpy())
-            test_evs.append(
-                tf.reduce_mean(utility(learner.policy(inputs),
-                                       test_rewards)).numpy())
-        return evs, test_evs
+
+            if test_rewards is not None:
+                test_evs.append(
+                    tf.reduce_mean(
+                        utility(learner.policy(inputs), test_rewards)).numpy())
+        if test_rewards is None:
+            return evs
+        else:
+            return evs, test_evs
