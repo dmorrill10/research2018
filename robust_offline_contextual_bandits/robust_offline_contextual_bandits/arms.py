@@ -32,6 +32,14 @@ class ArmsWithContexts(object):
         self.stddev = stddev
         self.components_for_training = arms.components_for_training(x, stddev)
 
+    @property
+    def colors(self):
+        return self.arms.colors
+
+    @property
+    def reward_functions(self):
+        return self.arms.reward_functions
+
     def __getitem__(self, action):
         return self.components_for_training[action]
 
