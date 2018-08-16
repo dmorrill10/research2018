@@ -3,6 +3,15 @@ from robust_offline_contextual_bandits.data import DataComponentsForTraining
 from tf_supervised_inference.data import Data, NamedDataSets
 
 
+def _bounds(x):
+    min_x, max_x = min(x), max(x)
+    diff = max_x - min_x
+    remaining_diff = 2 / 500.0 - diff
+    if remaining_diff > 0:
+        min_x -= remaining_diff / 2.0
+        max_x += remaining_diff / 2.0
+    return min_x, max_x
+
 class PlateauFunction(object):
     @classmethod
     def sample_from_bounds_and_averages(cls, x_min, x_max, avg_num_plateaus,
@@ -15,7 +24,7 @@ class PlateauFunction(object):
         heights = np.random.normal(0.0, size=[num_plateaus])
         midpoints = np.random.uniform(x_min, x_max, size=[num_plateaus])
         num_points_per_plateau = max(
-            1,
+            2,
             int(
                 np.ceil(
                     np.abs(
@@ -38,7 +47,7 @@ class PlateauFunction(object):
         self.heights = heights
         self.function_outside_plateaus = function_outside_plateaus
         self.x_clusters = x_clusters
-        self.x_bounds = [(min(x), max(x)) for x in self.x_clusters]
+        self.x_bounds = [_bounds(x) for x in self.x_clusters]
 
     def __call__(self, x, stddev=0.0):
         y = np.random.normal(
