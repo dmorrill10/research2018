@@ -205,6 +205,14 @@ class NamedStyles(object):
     def clone(self, name):
         return deepcopy(self[name])
 
+    def item_with_label(self, name):
+        d = {'label': name}
+        d.update(self[name])
+        return d
+
+    def list(self, names):
+        return [self.item_with_label(name) for name in names]
+
 
 def plot_percentile_performance(methods, baseline=None):
     plt.close()
