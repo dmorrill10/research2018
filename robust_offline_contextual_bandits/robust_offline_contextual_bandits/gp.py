@@ -152,3 +152,9 @@ def sample_reward_tensors_from_gp_function(num_worlds, phi, gp_models):
             tf.stack([model(size=n) for model in gps_at_inputs]), [1, 0, 2])
 
     return f
+
+
+def map_predictions(gp_models, x):
+    return tf.concat(
+        [model.maximum_a_posteriori_estimate()(x) for model in gp_models],
+        axis=1)
