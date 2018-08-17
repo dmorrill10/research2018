@@ -21,8 +21,8 @@ class RepresentationWithFixedInputs(object):
 
 class RawRepresentationWithFixedInputs(RepresentationWithFixedInputs):
     def __init__(self, x):
-        super(RawRepresentationWithFixedInputs,
-              self).__init__(lambda x: tf.convert_to_tensor(x))
+        super(RawRepresentationWithFixedInputs, self).__init__(
+            lambda x: tf.convert_to_tensor(x), x)
 
 
 class TileCodingRepresentationWithFixedInputs(RepresentationWithFixedInputs):
