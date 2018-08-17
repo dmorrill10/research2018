@@ -12,6 +12,7 @@ def _bounds(x):
         max_x += remaining_diff / 2.0
     return min_x, max_x
 
+
 class PlateauFunction(object):
     @classmethod
     def sample_from_bounds_and_averages(cls, x_min, x_max, avg_num_plateaus,

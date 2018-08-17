@@ -1,5 +1,6 @@
 import tensorflow as tf
 import numpy as np
+import GPy as gp_lib
 
 
 class GpMap(object):
@@ -82,6 +83,42 @@ class GpAtInputs(object):
 
 
 class Gp(object):
+    @classmethod
+    def gp_regression(cls,
+                      phi,
+                      y,
+                      kernel,
+                      num_inducing,
+                      use_random_inducing=True):
+        num_examples, num_features = phi.shape
+        num_outputs = phi.shape[1]
+        bias = y.mean()
+        mean_function = gp_lib.mappings.Constant(num_features, num_outputs,
+                                                 bias)
+
+        if num_inducing == num_examples:
+            gp = gp_lib.models.GPRegression(
+                phi, y, kernel, mean_function=mean_function)
+        else:
+            gp = (
+                gp_lib.models.SparseGPRegression(
+                    phi,
+                    y,
+                    kernel,
+                    Z=phi[np.random.choice(
+                        num_examples, num_inducing, replace=False)],
+                    mean_function=mean_function
+                ) if use_random_inducing
+                else gp_lib.models.SparseGPRegression(
+                    phi,
+                    y,
+                    kernel,
+                    num_inducing=num_inducing,
+                    mean_function=mean_function
+                )
+            )  # yapf:disable
+        return cls(gp)
+
     def __init__(self, gp, bias=0.0):
         self.gp = gp
         self.bias = bias

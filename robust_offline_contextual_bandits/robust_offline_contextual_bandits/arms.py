@@ -1,5 +1,9 @@
 import tensorflow as tf
+import numpy as np
+import GPy as gp_lib
+
 from robust_offline_contextual_bandits.plotting import tableu20_color_table
+from robust_offline_contextual_bandits.gp import Gp
 
 
 class Arms(object):
@@ -32,6 +36,27 @@ class ArmsWithContexts(object):
         self.x = x
         self.stddev = stddev
         self.components_for_training = arms.components_for_training(x, stddev)
+
+    def new_gp_models(self,
+                      gp_inducing_input_fraction=1.0,
+                      use_random_inducing=True):
+        gp_models = []
+        for a, components in self.training_components_from_each_arm():
+            num_examples = components.noisy_data.good.num_examples()
+            num_features = components.noisy_data.good.num_features()
+
+            num_inducing = int(
+                np.ceil(num_examples * gp_inducing_input_fraction))
+
+            gp_models.append(
+                Gp.gp_regression(
+                    components.noisy_data.good.phi.numpy(),
+                    components.noisy_data.good.y.numpy(),
+                    gp_lib.kern.Matern32(num_features) +
+                    gp_lib.kern.White(num_features),
+                    num_inducing,
+                    use_random_inducing=use_random_inducing))
+        return gp_models
 
     @property
     def colors(self):
