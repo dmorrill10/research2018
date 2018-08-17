@@ -1,9 +1,14 @@
 import tensorflow as tf
+import numpy as np
 from tensorflow.python.ops.resource_variable_ops import ResourceVariable
 from tf_kofn_robust_policy_optimization.robust.kofn import ContextualKofnGame
 from tf_contextual_prediction_with_expert_advice import rm_policy, utility
 from tf_contextual_prediction_with_expert_advice.rrm import rrm_loss
-from robust_offline_contextual_bandits.policy import softmax
+from robust_offline_contextual_bandits.policy import \
+    softmax, \
+    sorted_values_across_worlds
+from simple_pytimer import AccumulatingTimer
+import matplotlib.pyplot as plt
 
 
 class KofnLearner(object):
@@ -340,3 +345,152 @@ class KofnTrainer(object):
             return evs
         else:
             return evs, test_evs
+
+
+class KofnTraining(object):
+    def __init__(self,
+                 trainer,
+                 input_generator,
+                 reward_sampling_timer,
+                 num_iterations=1000,
+                 num_ts_between_saving_checkpoints=1,
+                 num_display_checkpoints=10):
+        self.trainer = trainer
+        self.input_generator = input_generator
+        self.num_iterations = num_iterations
+        self.num_ts_between_saving_checkpoints = num_ts_between_saving_checkpoints
+        self.num_display_checkpoints = num_display_checkpoints
+        self.reward_sampling_timer = reward_sampling_timer
+
+        self.kofn_timer = AccumulatingTimer('k-of-n training')
+        self.losses_over_time = []
+        self.evs_over_time = []
+        self.checkpoint_iterations = []
+
+    def missed_checkpoint(self):
+        return (len(self.checkpoint_iterations) < 1
+                or self.checkpoint_iterations[-1] < self.trainer.t)
+
+    def is_last_iteration(self):
+        return self.trainer.t % self.num_iterations == 0
+
+    def is_checkpoint_iteration(self):
+        return (self.trainer.t % self.num_ts_between_saving_checkpoints == 0
+                or self.is_last_iteration())
+
+    def is_display_iteration(self):
+        return (self.trainer.t %
+                (self.num_iterations // self.num_display_checkpoints) == 0
+                or self.is_last_iteration())
+
+    def plot_loss_curves(self, policy_alg_styles):
+        _lot = np.array(self.losses_over_time).T
+        for i in range(len(_lot)):
+            l = _lot[i]
+            t = self.trainer.learners[i]
+            plt.plot(
+                self.checkpoint_iterations,
+                l,
+                alpha=0.3,
+                **policy_alg_styles[str(t)])
+            plt.plot(
+                self.checkpoint_iterations,
+                l.cumsum() / np.arange(1,
+                                       len(l) + 1),
+                label=str(t),
+                **policy_alg_styles[str(t)])
+        plt.legend()
+        plt.xlabel('iteration')
+        plt.ylabel('MSE')
+
+    def plot_ev_curves(self, policy_alg_styles, with_avg=False):
+        _eot = np.array(self.evs_over_time).T
+        for i in range(len(_eot)):
+            l = _eot[i]
+            t = self.trainer.learners[i]
+
+            if with_avg:
+                plt.plot(
+                    self.checkpoint_iterations,
+                    l,
+                    alpha=0.2,
+                    **policy_alg_styles[str(t)])
+                plt.plot(
+                    self.checkpoint_iterations,
+                    l.cumsum() / np.arange(1,
+                                           len(l) + 1),
+                    label=str(t),
+                    **policy_alg_styles[str(t)])
+            else:
+                plt.plot(
+                    self.checkpoint_iterations,
+                    l,
+                    label=str(t),
+                    **policy_alg_styles[str(t)])
+        plt.legend()
+        plt.xlabel('iteration')
+        plt.ylabel('training EV')
+
+    def reward_across_inputs(self, rewards):
+        return [
+            self.utility(learner, rewards) for learner in self.trainer.learners
+        ]
+
+    def sorted_values_across_worlds(self, rewards):
+        return [
+            sorted_values_across_worlds(
+                learner.policy(next(self.input_generator())), rewards)
+            for learner in self.trainer.learners
+        ]
+
+    def utility(self, learner, rewards):
+        return utility(learner.policy(next(self.input_generator())), rewards)
+
+    def value_slopes_and_biases(self, arms_with_contexts):
+        test_rewards = [
+            arms_with_contexts.with_function_outside_plateaus(lambda _: i)
+            .combined_raw_y() for i in range(2)
+        ]
+        slopes_and_biases = []
+        for learner in self.trainer.learners:
+            bias = tf.reduce_mean(self.utility(learner, test_rewards[0]))
+            slope = tf.reduce_mean(self.utility(learner,
+                                                test_rewards[1])) - bias
+            slopes_and_biases.append((slope.numpy(), bias.numpy()))
+        return slopes_and_biases
+
+    def run(self):
+        if self.missed_checkpoint():
+            evs = self.trainer.evaluate(next(self.input_generator()))
+
+            self.evs_over_time.append(evs)
+            self.checkpoint_iterations.append(self.trainer.t)
+
+            print('# After epoch #{}'.format(self.trainer.t))
+            print('ev: {}'.format(evs))
+
+        with self.kofn_timer:
+            for _ in range(self.num_iterations):
+                for losses in self.trainer.start(self.input_generator()):
+                    if len(self.losses_over_time) < len(
+                            self.checkpoint_iterations):
+                        self.losses_over_time.append(
+                            [l.numpy() for l in losses])
+
+                    if self.is_checkpoint_iteration():
+                        evs = self.trainer.evaluate(
+                            next(self.input_generator()))
+
+                        self.evs_over_time.append(evs)
+                        self.losses_over_time.append(
+                            [l.numpy() for l in losses])
+                        self.checkpoint_iterations.append(self.trainer.t)
+
+                    if self.is_display_iteration():
+                        print('# After epoch #{}'.format(self.trainer.t))
+                        print('loss: {}\nev: {}'.format(
+                            self.losses_over_time[-1], self.evs_over_time[-1]))
+                        print(self.reward_sampling_timer)
+
+                        self.kofn_timer.mark()
+                        print(self.kofn_timer)
