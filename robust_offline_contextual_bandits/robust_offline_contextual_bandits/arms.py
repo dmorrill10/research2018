@@ -1,6 +1,7 @@
 import tensorflow as tf
 import numpy as np
 import GPy as gp_lib
+from tf_contextual_prediction_with_expert_advice import utility
 
 from robust_offline_contextual_bandits.plotting import tableu20_color_table
 from robust_offline_contextual_bandits.gp import Gp
@@ -36,6 +37,16 @@ class ArmsWithContexts(object):
         self.x = x
         self.stddev = stddev
         self.components_for_training = arms.components_for_training(x, stddev)
+
+    def value_slope_and_bias(self, policy):
+        test_rewards = [
+            self.with_function_outside_plateaus(
+                lambda x: np.full(x.shape, float(i))).combined_raw_y()
+            for i in range(2)
+        ]
+        bias = tf.reduce_mean(utility(policy, test_rewards[0]))
+        slope = tf.reduce_mean(utility(policy, test_rewards[1])) - bias
+        return slope, bias
 
     def new_gp_models(self,
                       gp_inducing_input_fraction=1.0,
