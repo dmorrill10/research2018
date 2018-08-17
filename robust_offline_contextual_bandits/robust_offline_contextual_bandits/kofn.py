@@ -502,8 +502,9 @@ class KofnTraining(object):
                         self.checkpoint_iterations.append(self.t)
 
                     if self.is_display_iteration():
-                        print('{}: loss: {}\nev: {}'.format(
-                            self.t, self.losses_now(), self.evs_now()))
+                        print('{}: loss: {}\n{}  ev: {}'.format(
+                            self.t, self.losses_now(), ' ' * len(str(self.t)),
+                            self.evs_now()))
                         print(self.reward_sampling_timer)
 
                         self.kofn_timer.mark()
