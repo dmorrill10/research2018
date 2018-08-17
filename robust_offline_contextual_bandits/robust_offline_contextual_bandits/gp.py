@@ -46,11 +46,12 @@ class GpAtInputs(object):
                 v = self.var
 
             var_diag = np.diag(self.var)
-            if np.any(self.var <= 0.0):
+            if np.any(var_diag <= 0.0):
                 print(
-                    "WARNING: not pd: non-positive diagonal elements: {}. Setting to zero.".
-                    format(self.var.min()))
-                self.var = np.maximum(self.var, 0.0)
+                    "WARNING: not pd: non-positive diagonal elements: {}. Shifting diagonal.".
+                    format(min(var_diag)))
+                self.var = self.var - np.diag(np.minimum(var_diag, 0.0))
+                # self.var = np.maximum(self.var, 0.0)
             jitter = var_diag.mean() * 1e-6
             num_tries = 1
             while num_tries <= maxtries and np.isfinite(jitter):
