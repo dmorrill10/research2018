@@ -1,22 +1,52 @@
 import tensorflow as tf
 import numpy as np
 from tensorflow.python.ops.resource_variable_ops import ResourceVariable
-from tf_kofn_robust_policy_optimization.robust.kofn import ContextualKofnGame
+import yaml
+
+from tf_kofn_robust_policy_optimization.robust.kofn import \
+    ContextualKofnGame, \
+    DeterministicKofnGameTemplate
 from tf_contextual_prediction_with_expert_advice import rm_policy, utility
 from tf_contextual_prediction_with_expert_advice.rrm import rrm_loss
+
 from robust_offline_contextual_bandits.policy import \
     softmax, \
     sorted_values_across_worlds
 from simple_pytimer import AccumulatingTimer
+
 import matplotlib.pyplot as plt
 
 
 class KofnLearner(object):
+    @classmethod
+    def load(cls, name, optimizer):
+        with open('{}.yml'.format(name), "w") as yaml_file:
+            data_string = yaml_file.read()
+        data = yaml.safe_load(data_string)
+        kofn_data = data.pop('kofn')
+        template = DeterministicKofnGameTemplate(kofn_data['k'],
+                                                 kofn_data['n'])
+
+        model = tf.keras.models.model_from_yaml(data_string)
+        model.load_weights('{}.h5'.format(name))
+        return cls(template, model, optimizer, label=data.pop('label'))
+
     def __init__(self, template, model, optimizer, label=None):
         self.model = model
         self.template = template
         self.optimizer = optimizer
         self.label = label
+
+    def save(self, name):
+        model_yaml = (
+            self.model.to_yaml()
+            + "label: {}\n".format(self.label)
+            + "kofn:\n{}".format(self.template.to_yml(indent=2))
+        )  # yapf:disable
+
+        with open('{}.yml'.format(name), "w") as yaml_file:
+            yaml_file.write(model_yaml)
+        self.model.save_weights('{}.h5'.format(name))
 
     def policy(self, inputs):
         return self.policy_activation(self.model(inputs))
