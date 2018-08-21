@@ -354,8 +354,7 @@ class KofnTrainer(object):
     def step(self, inputs):
         reward = self.reward_generator(inputs)
         losses = []
-        for i in range(len(self.learners)):
-            learner = self.learners[i]
+        for learner in self.learners:
             loss, grad = learner.loss_and_grad(inputs, reward)
             losses.append(loss)
             learner.apply(grad)
@@ -399,8 +398,8 @@ class KofnTrainingData(object):
 
     def __init__(self, losses_over_time, evs_over_time, checkpoint_iterations):
         assert len(losses_over_time) == len(evs_over_time)
-        for i in range(losses_over_time):
-            assert len(losses_over_time[i]) == len(evs_over_time[i])
+        for i, lot in enumerate(losses_over_time):
+            assert len(lot) == len(evs_over_time[i])
 
         self._losses_over_time = losses_over_time
         self._evs_over_time = evs_over_time
