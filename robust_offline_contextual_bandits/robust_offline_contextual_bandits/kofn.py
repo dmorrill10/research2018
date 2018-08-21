@@ -2,7 +2,6 @@ import tensorflow as tf
 import numpy as np
 from tensorflow.python.ops.resource_variable_ops import ResourceVariable
 import yaml
-from itertools import product
 
 from tf_kofn_robust_policy_optimization.robust.kofn import \
     ContextualKofnGame, \
@@ -586,36 +585,34 @@ class KofnTraining(object):
             print('{}: ev: {}'.format(self.t, evs))
 
         with self.kofn_timer:
-            for iteration, losses in product(
-                range(self.num_iterations),
-                self.trainer.start(self.input_generator())
-            ):  # yapf:disable
-                if self.loss_measurement_is_missing():
-                    for i in range(len(self.learners)):
-                        self._data._losses_over_time[i].append(losses[i])
+            for iteration in range(self.num_iterations):
+                for losses in self.trainer.start(self.input_generator()):
+                    if self.loss_measurement_is_missing():
+                        for i in range(len(self.learners)):
+                            self._data._losses_over_time[i].append(losses[i])
 
-                if self.is_checkpoint_iteration():
-                    evs = self.evaluate()
+                    if self.is_checkpoint_iteration():
+                        evs = self.evaluate()
 
-                    for i in range(len(self.learners)):
-                        self._data._evs_over_time[i].append(evs[i])
-                        self._data._losses_over_time[i].append(losses[i])
-                    self._data.checkpoint_iterations.append(self.t)
+                        for i in range(len(self.learners)):
+                            self._data._evs_over_time[i].append(evs[i])
+                            self._data._losses_over_time[i].append(losses[i])
+                        self._data.checkpoint_iterations.append(self.t)
 
-                if self.is_display_iteration():
-                    progress = '{}/{}'.format(iteration + 1,
-                                              self.num_iterations)
-                    print(
-                        '{}: t: {}\n{}  loss: {}\n{}  ev: {}'.format(
-                            progress,
-                            self.t,
-                            ' ' * len(progress),
-                            self.losses_now(),
-                            ' ' * len(progress),
-                            self.evs_now()
-                        )
-                    )  # yapf:disable
-                    print(self.reward_sampling_timer)
+                    if self.is_display_iteration():
+                        progress = '{}/{}'.format(iteration + 1,
+                                                  self.num_iterations)
+                        print(
+                            '{}: t: {}\n{}  loss: {}\n{}  ev: {}'.format(
+                                progress,
+                                self.t,
+                                ' ' * len(progress),
+                                self.losses_now(),
+                                ' ' * len(progress),
+                                self.evs_now()
+                            )
+                        )  # yapf:disable
+                        print(self.reward_sampling_timer)
 
-                    self.kofn_timer.mark()
-                    print(self.kofn_timer)
+                        self.kofn_timer.mark()
+                        print(self.kofn_timer)
