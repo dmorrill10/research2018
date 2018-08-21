@@ -22,7 +22,9 @@ class KofnLearner(object):
     def load(cls, name, optimizer):
         with open('{}.yml'.format(name), "r") as yaml_file:
             data_string = yaml_file.read()
-        data = yaml.safe_load(data_string)
+
+        # Keras saves models in a way that requires an unsafe load
+        data = yaml.load(data_string)
         kofn_data = data.pop('kofn')
         template = DeterministicKofnGameTemplate(kofn_data['k'],
                                                  kofn_data['n'])
