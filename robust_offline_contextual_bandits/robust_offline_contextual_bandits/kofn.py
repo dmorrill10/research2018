@@ -388,11 +388,11 @@ class KofnTrainingData(object):
 
     @classmethod
     def load(cls, name):
-        with open('{}.losses_over_time.npy'.format(name), 'w') as f:
+        with open('{}.losses_over_time.npy'.format(name), 'rb') as f:
             lot = np.load(f)
-        with open('{}.evs_over_time.npy'.format(name), 'w') as f:
+        with open('{}.evs_over_time.npy'.format(name), 'rb') as f:
             eot = np.load(f)
-        with open('{}.checkpoint_iterations.npy'.format(name), 'w') as f:
+        with open('{}.checkpoint_iterations.npy'.format(name), 'rb') as f:
             ci = np.load(f)
         return cls(lot.tolist(), eot.tolist(), ci)
 
@@ -409,11 +409,11 @@ class KofnTrainingData(object):
         return len(self._losses_over_time[0]) < len(self.checkpoint_iterations)
 
     def save(self, name):
-        with open('{}.losses_over_time.npy'.format(name), 'w') as f:
+        with open('{}.losses_over_time.npy'.format(name), 'wb') as f:
             np.save(f, self.losses_over_time)
-        with open('{}.evs_over_time.npy'.format(name), 'w') as f:
+        with open('{}.evs_over_time.npy'.format(name), 'wb') as f:
             np.save(f, self.evs_over_time)
-        with open('{}.checkpoint_iterations.npy'.format(name), 'w') as f:
+        with open('{}.checkpoint_iterations.npy'.format(name), 'wb') as f:
             np.save(f, self.checkpoint_iterations)
         return self
 
