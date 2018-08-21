@@ -404,6 +404,11 @@ class KofnTrainingData(object):
         self._evs_over_time = evs_over_time
         self.checkpoint_iterations = checkpoint_iterations
 
+    def __getitem__(self, i):
+        return self.__class__(self._losses_over_time[i],
+                              self._evs_over_time[i],
+                              self.checkpoint_iterations)
+
     def loss_measurement_is_missing(self):
         return len(self._losses_over_time[0]) < len(self.checkpoint_iterations)
 
