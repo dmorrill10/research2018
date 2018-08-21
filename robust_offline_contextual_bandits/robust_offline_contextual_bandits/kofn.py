@@ -20,7 +20,7 @@ import matplotlib.pyplot as plt
 class KofnLearner(object):
     @classmethod
     def load(cls, name, optimizer):
-        with open('{}.yml'.format(name), "w") as yaml_file:
+        with open('{}.yml'.format(name), "r") as yaml_file:
             data_string = yaml_file.read()
         data = yaml.safe_load(data_string)
         kofn_data = data.pop('kofn')
