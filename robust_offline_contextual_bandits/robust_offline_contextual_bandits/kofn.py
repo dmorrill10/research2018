@@ -2,6 +2,7 @@ import tensorflow as tf
 import numpy as np
 from tensorflow.python.ops.resource_variable_ops import ResourceVariable
 import yaml
+from itertools import product
 
 from tf_kofn_robust_policy_optimization.robust.kofn import \
     ContextualKofnGame, \
@@ -18,6 +19,7 @@ import matplotlib.pyplot as plt
 
 
 class KofnLearner(object):
+    # TODO: Separate from optimizer
     @classmethod
     def load(cls, name, optimizer):
         with open('{}.yml'.format(name), "r") as yaml_file:
@@ -379,6 +381,58 @@ class KofnTrainer(object):
             return evs, test_evs
 
 
+class KofnTrainingData(object):
+    @classmethod
+    def empty(cls, num_learners):
+        return cls([[] for _ in range(num_learners)],
+                   [[] for _ in range(num_learners)], [])
+
+    @classmethod
+    def load(cls, name):
+        with open('{}.losses_over_time.npy'.format(name), 'w') as f:
+            lot = np.load(f)
+        with open('{}.evs_over_time.npy'.format(name), 'w') as f:
+            eot = np.load(f)
+        with open('{}.checkpoint_iterations.npy'.format(name), 'w') as f:
+            ci = np.load(f)
+        return cls(lot.tolist(), eot.tolist(), ci)
+
+    def __init__(self, losses_over_time, evs_over_time, checkpoint_iterations):
+        assert len(losses_over_time) == len(evs_over_time)
+        for i in range(losses_over_time):
+            assert len(losses_over_time[i]) == len(evs_over_time[i])
+
+        self._losses_over_time = losses_over_time
+        self._evs_over_time = evs_over_time
+        self.checkpoint_iterations = checkpoint_iterations
+
+    def loss_measurement_is_missing(self):
+        return len(self._losses_over_time[0]) < len(self.checkpoint_iterations)
+
+    def save(self, name):
+        with open('{}.losses_over_time.npy'.format(name), 'w') as f:
+            np.save(f, self.losses_over_time)
+        with open('{}.evs_over_time.npy'.format(name), 'w') as f:
+            np.save(f, self.evs_over_time)
+        with open('{}.checkpoint_iterations.npy'.format(name), 'w') as f:
+            np.save(f, self.checkpoint_iterations)
+        return self
+
+    @property
+    def losses_over_time(self):
+        return tf.stack(self._losses_over_time).numpy()
+
+    @property
+    def evs_over_time(self):
+        return tf.stack(self._evs_over_time).numpy()
+
+    def losses_now(self):
+        return self.losses_over_time[:, -1]
+
+    def evs_now(self):
+        return self.evs_over_time[:, -1]
+
+
 class KofnTraining(object):
     def __init__(self,
                  trainer,
@@ -395,9 +449,23 @@ class KofnTraining(object):
         self.reward_sampling_timer = reward_sampling_timer
 
         self.kofn_timer = AccumulatingTimer('k-of-n training')
-        self.losses_over_time = [[] for _ in self.learners]
-        self.evs_over_time = [[] for _ in self.learners]
-        self.checkpoint_iterations = []
+        self._data = KofnTrainingData.empty(len(self.learners))
+
+    def save_data(self, name):
+        self._data.save(name)
+        return self
+
+    @property
+    def losses_over_time(self):
+        return self._data.losses_over_time
+
+    @property
+    def evs_over_time(self):
+        return self._data.evs_over_time
+
+    @property
+    def checkpoint_iterations(self):
+        return self._data.checkpoint_iterations
 
     @property
     def learners(self):
@@ -427,7 +495,7 @@ class KofnTraining(object):
                 or self.is_last_iteration())
 
     def plot_loss_curves(self, policy_alg_styles):
-        _lot = np.array(self.losses_over_time)
+        _lot = self.losses_over_time
         for i, l in enumerate(_lot):
             t = self.learners[i]
             plt.plot(
@@ -445,7 +513,7 @@ class KofnTraining(object):
         plt.ylabel('MSE')
 
     def plot_ev_curves(self, policy_alg_styles, with_avg=False):
-        _eot = np.array(self.evs_over_time)
+        _eot = self.evs_over_time
         for i, l in enumerate(_eot):
             t = self.learners[i]
 
@@ -497,13 +565,13 @@ class KofnTraining(object):
         return slopes_and_biases
 
     def loss_measurement_is_missing(self):
-        return len(self.losses_over_time[0]) < len(self.checkpoint_iterations)
+        return self._data.loss_measurement_is_missing()
 
     def losses_now(self):
-        return [losses[-1] for losses in self.losses_over_time]
+        return self._data.losses_now()
 
     def evs_now(self):
-        return [evs[-1] for evs in self.evs_over_time]
+        return self._data.evs_now()
 
     def evaluate(self):
         return self.trainer.evaluate(self.next_input())
@@ -513,31 +581,42 @@ class KofnTraining(object):
             evs = self.evaluate()
 
             for i in range(len(self.learners)):
-                self.evs_over_time[i].append(evs[i])
-            self.checkpoint_iterations.append(self.t)
+                self._data._evs_over_time[i].append(evs[i])
+            self._data.checkpoint_iterations.append(self.t)
 
             print('{}: ev: {}'.format(self.t, evs))
 
         with self.kofn_timer:
-            for _ in range(self.num_iterations):
-                for losses in self.trainer.start(self.input_generator()):
-                    if self.loss_measurement_is_missing():
-                        for i in range(len(self.learners)):
-                            self.losses_over_time[i].append(losses[i].numpy())
+            for iteration, losses in product(
+                range(self.num_iterations),
+                self.trainer.start(self.input_generator())
+            ):  # yapf:disable
+                if self.loss_measurement_is_missing():
+                    for i in range(len(self.learners)):
+                        self._data._losses_over_time[i].append(losses[i])
 
-                    if self.is_checkpoint_iteration():
-                        evs = self.evaluate()
+                if self.is_checkpoint_iteration():
+                    evs = self.evaluate()
 
-                        for i in range(len(self.learners)):
-                            self.evs_over_time[i].append(evs[i])
-                            self.losses_over_time[i].append(losses[i].numpy())
-                        self.checkpoint_iterations.append(self.t)
+                    for i in range(len(self.learners)):
+                        self._data._evs_over_time[i].append(evs[i])
+                        self._data._losses_over_time[i].append(losses[i])
+                    self._data.checkpoint_iterations.append(self.t)
 
-                    if self.is_display_iteration():
-                        print('{}: loss: {}\n{}  ev: {}'.format(
-                            self.t, self.losses_now(), ' ' * len(str(self.t)),
-                            self.evs_now()))
-                        print(self.reward_sampling_timer)
+                if self.is_display_iteration():
+                    progress = '{}/{}'.format(iteration + 1,
+                                              self.num_iterations)
+                    print(
+                        '{}: t: {}\n{}  loss: {}\n{}  ev: {}'.format(
+                            progress,
+                            self.t,
+                            ' ' * len(progress),
+                            self.losses_now(),
+                            ' ' * len(progress),
+                            self.evs_now()
+                        )
+                    )  # yapf:disable
+                    print(self.reward_sampling_timer)
 
-                        self.kofn_timer.mark()
-                        print(self.kofn_timer)
+                    self.kofn_timer.mark()
+                    print(self.kofn_timer)
