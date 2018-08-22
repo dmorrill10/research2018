@@ -395,6 +395,14 @@ class KofnTrainingData(object):
             ci = np.load(f)
         return cls(lot.tolist(), eot.tolist(), ci)
 
+    @classmethod
+    def combine(cls, *data):
+        return cls(
+            sum([d._losses_over_time for d in data], []),
+            sum([d._evs_over_time for d in data], []),
+            data[0].checkpoint_iterations
+        )
+
     def __init__(self, losses_over_time, evs_over_time, checkpoint_iterations):
         assert len(losses_over_time) == len(evs_over_time)
         for i, lot in enumerate(losses_over_time):
