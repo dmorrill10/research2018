@@ -79,9 +79,12 @@ class PlateauFunction(object):
             y = np.full([len(x)], np.nan)
         else:
             y = outside_plateaus(x)
+        if len(x.shape) < 2:
+            x = np.expand_dims(x, 1)
         for i in range(len(self.x_bounds)):
             x_min, x_max = self.x_bounds[i]
-            x_in_bounds = np.logical_and(x_min <= x, x <= x_max)
+            x_in_bounds = np.logical_and(
+                np.all(x_min <= x, axis=-1), np.all(x <= x_max, axis=-1))
             num_bounded_x = x_in_bounds.sum()
             y[x_in_bounds] = np.random.normal(
                 self.heights[i], stddev, size=[num_bounded_x])
@@ -97,13 +100,15 @@ class PlateauFunction(object):
         return x_train, y_train
 
     def in_bounds(self, x):
-        x = x.squeeze()
-        in_bounds = np.full(x.shape, False)
+        if len(x.shape) < 2:
+            x = np.expand_dims(x, 1)
+        in_bounds = np.full([len(x)], False)
         for i in range(len(self.x_bounds)):
             x_min, x_max = self.x_bounds[i]
             np.logical_or(
                 in_bounds,
-                np.logical_and(x_min <= x, x <= x_max),
+                np.logical_and(
+                    np.all(x_min <= x, axis=-1), np.all(x <= x_max, axis=-1)),
                 out=in_bounds)
         return in_bounds
 
