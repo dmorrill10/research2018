@@ -4,15 +4,14 @@ import GPy as gp_lib
 
 
 class GpMap(object):
-    def __init__(self, gp, bias=0.0):
+    def __init__(self, gp):
         self.gp = gp
-        self.bias = bias
 
     def predict(self, phi):
         return self(phi)
 
     def __call__(self, phi):
-        return self.gp.predict_noiseless(phi)[0].astype('float32') + self.bias
+        return self.gp.predict_noiseless(phi)[0].astype('float32')
 
 
 class MultivariateNormalSampler(object):
@@ -24,19 +23,25 @@ class MultivariateNormalSampler(object):
         return (self.mu + tf.random_normal(shape=[n, self.mu.shape[1].value])
                 @ self.scale_triu)
 
+    def num_outputs(self):
+        return self.mu.shape[1].value
+
 
 class GpAtInputs(object):
-    def __init__(self, mean, var, bias=0.0, full_cov=True, maxtries=10):
+    def load(cls, name):
+        return cls(*np.load('{}.npy'.format(name)))
+
+    def __init__(self, mean, var, full_cov=True, maxtries=10):
         self.mean = mean
         self.var = var
-        self.bias = bias
+        self.maxtries = maxtries
         self.full_cov = full_cov
 
         output_dim = self.mean.shape[1]
         self.dists = []
         for d in range(output_dim):
             m = self.mean[:, d]
-            adjusted_mean = m.flatten().astype('float32') + self.bias
+            adjusted_mean = m.flatten().astype('float32')
 
             if full_cov and self.var.ndim == 3:
                 v = self.var[:, :, d]
@@ -51,12 +56,11 @@ class GpAtInputs(object):
                     "WARNING: not pd: non-positive diagonal elements: {}. Shifting diagonal.".
                     format(min(var_diag)))
                 self.var = self.var - np.diag(np.minimum(var_diag, 0.0))
-                # self.var = np.maximum(self.var, 0.0)
             jitter = var_diag.mean() * 1e-6
             num_tries = 1
             while num_tries <= maxtries and np.isfinite(jitter):
                 try:
-                    if self.full_cov:
+                    if full_cov:
                         self.dists.append(
                             MultivariateNormalSampler(
                                 adjusted_mean, (v + np.eye(v.shape[0]) * jitter
@@ -71,6 +75,11 @@ class GpAtInputs(object):
                 finally:
                     num_tries += 1
             raise RuntimeError("not positive definite, even with jitter.")
+
+    def save(self, name):
+        np.save('{}.npy'.format(name),
+                [self.mean, self.var, self.full_cov, self.maxtries])
+        return self
 
     def __call__(self, size=1):
         output_dim = self.mean.shape[1]
@@ -120,9 +129,8 @@ class Gp(object):
             )  # yapf:disable
         return cls(gp)
 
-    def __init__(self, gp, bias=0.0):
+    def __init__(self, gp):
         self.gp = gp
-        self.bias = bias
 
     def sample(self, num_samples=1):
         return [self] * num_samples
@@ -131,18 +139,17 @@ class Gp(object):
         return self(phi)
 
     def __call__(self, phi, size=1):
-        return (self.gp.posterior_samples_f(phi, size=size).astype('float32') +
-                self.bias)
+        return self.gp.posterior_samples_f(phi, size=size).astype('float32')
 
     def maximum_a_posteriori_estimate(self):
-        return GpMap(self.gp, bias=self.bias)
+        return GpMap(self.gp)
 
     def at_inputs(self, phi):
         m, v = self.gp._raw_predict(phi, full_cov=True)
         if self.gp.normalizer is not None:
             m, v = (self.gp.normalizer.inverse_mean(m),
                     self.gp.normalizer.inverse_variance(v))
-        return GpAtInputs(m, v, bias=self.bias)
+        return GpAtInputs(m, v)
 
 
 def sample_reward_tensors_from_gp_function(num_worlds, phi, gp_models):
