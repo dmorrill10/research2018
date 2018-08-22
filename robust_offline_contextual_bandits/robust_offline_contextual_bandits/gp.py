@@ -159,3 +159,24 @@ def map_predictions(gp_models, x):
     return tf.concat(
         [model.maximum_a_posteriori_estimate()(x) for model in gp_models],
         axis=1)
+
+
+def new_gp_models(training_data_generator,
+                  gp_inducing_input_fraction=1.0,
+                  use_random_inducing=True):
+    gp_models = []
+    for a, (x_train, y_train) in enumerate(training_data_generator):
+        num_examples = len(x_train)
+        num_features = x_train.shape[1]
+
+        num_inducing = int(np.ceil(num_examples * gp_inducing_input_fraction))
+
+        gp_models.append(
+            Gp.gp_regression(
+                x_train,
+                y_train,
+                gp_lib.kern.Matern32(num_features) +
+                gp_lib.kern.White(num_features),
+                num_inducing,
+                use_random_inducing=use_random_inducing))
+    return gp_models

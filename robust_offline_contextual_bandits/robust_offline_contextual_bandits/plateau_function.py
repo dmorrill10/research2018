@@ -1,6 +1,25 @@
+import tensorflow as tf
 import numpy as np
-from robust_offline_contextual_bandits.data import DataComponentsForTraining
 from tf_supervised_inference.data import Data, NamedDataSets
+from tf_contextual_bandit_rrm import utility
+
+from robust_offline_contextual_bandits.data import DataComponentsForTraining
+
+
+def training_data(plateau_functions, x, stddev=0.0):
+    for f in plateau_functions:
+        yield f.training_data(x, stddev=stddev)
+
+
+def slope_and_bias_across_constants_for_unknown_outputs(
+        plateau_functions, x, policy):
+    test_rewards = np.array([[
+        f(x, outside_plateaus=lambda x: np.full([len(x)], float(i)))
+        for f in plateau_functions
+    ] for i in range(2)])
+    bias = tf.reduce_mean(utility(policy, test_rewards[0]))
+    slope = tf.reduce_mean(utility(policy, test_rewards[1])) - bias
+    return slope, bias
 
 
 def _bounds(x):
@@ -55,15 +74,27 @@ class PlateauFunction(object):
         np.save('{}.npy'.format(name), [self.heights, self.x_clusters])
         return self
 
-    def __call__(self, x, outside_plateaus, stddev=0.0):
-        y = outside_plateaus(x)
+    def __call__(self, x, outside_plateaus=None, stddev=0.0):
+        if outside_plateaus is None:
+            y = np.full([len(x)], np.nan)
+        else:
+            y = outside_plateaus(x)
         for i in range(len(self.x_bounds)):
             x_min, x_max = self.x_bounds[i]
             x_in_bounds = np.logical_and(x_min <= x, x <= x_max)
             num_bounded_x = x_in_bounds.sum()
             y[x_in_bounds] = np.random.normal(
                 self.heights[i], stddev, size=[num_bounded_x])
-        return y
+        if outside_plateaus is None:
+            return y[np.isfinite(y)]
+        else:
+            return y
+
+    def training_data(self, x, stddev=0.0):
+        x_train = x[self.in_bounds(x)]
+        y_train = self(x_train, stddev=stddev)
+        assert len(x_train) == len(y_train)
+        return x_train, y_train
 
     def in_bounds(self, x):
         x = x.squeeze()
@@ -79,8 +110,9 @@ class PlateauFunction(object):
     def for_training(self,
                      x,
                      stddev=0.0,
-                     outside_plateaus=lambda x: np.zeros(len(x))):
-        y = self(np.squeeze(x), outside_plateaus).astype('float32')
+                     outside_plateaus=lambda x: np.zeros([len(x)])):
+        y = self(
+            np.squeeze(x), outside_plateaus=outside_plateaus).astype('float32')
 
         ge = self.in_bounds(x)
         be = np.logical_not(ge)
