@@ -1,7 +1,7 @@
 import tensorflow as tf
 import numpy as np
 from tf_supervised_inference.data import Data, NamedDataSets
-from tf_contextual_bandit_rrm import utility
+from tf_contextual_prediction_with_expert_advice import utility
 
 from robust_offline_contextual_bandits.data import DataComponentsForTraining
 
