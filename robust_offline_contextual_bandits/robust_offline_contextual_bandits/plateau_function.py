@@ -16,8 +16,7 @@ def _bounds(x):
 class PlateauFunction(object):
     @classmethod
     def sample_from_bounds_and_averages(cls, x_min, x_max, avg_num_plateaus,
-                                        avg_num_points_per_plateau,
-                                        function_outside_plateaus):
+                                        avg_num_points_per_plateau):
         stddev = np.abs(x_max - x_min)
         cluster_stddev = stddev / 20.0
         num_plateaus = int(
@@ -32,27 +31,32 @@ class PlateauFunction(object):
                         np.random.normal(avg_num_points_per_plateau,
                                          stddev)))))
         return cls.sample(midpoints, heights, num_points_per_plateau,
-                          cluster_stddev, function_outside_plateaus)
+                          cluster_stddev)
 
     @classmethod
-    def sample(cls, centers, heights, num_points_per_plateau, cluster_stddev,
-               function_outside_plateaus):
+    def sample(cls, centers, heights, num_points_per_plateau, cluster_stddev):
         x_clusters = [
             m +
             np.random.normal(0, cluster_stddev, size=[num_points_per_plateau])
             for m in centers
         ]
-        return cls(heights, x_clusters, function_outside_plateaus)
+        return cls(heights, x_clusters)
 
-    def __init__(self, heights, x_clusters, function_outside_plateaus):
+    @classmethod
+    def load(cls, name):
+        return cls(np.load('{}.npy'.format(name)))
+
+    def __init__(self, heights, x_clusters):
         self.heights = heights
-        self.function_outside_plateaus = function_outside_plateaus
         self.x_clusters = x_clusters
         self.x_bounds = [_bounds(x) for x in self.x_clusters]
 
-    def __call__(self, x, stddev=0.0):
-        y = np.random.normal(
-            self.function_outside_plateaus(x), stddev, size=[len(x)])
+    def save(self, name):
+        np.save('{}.npy'.format(name), [self.heights, self.x_clusters])
+        return self
+
+    def __call__(self, x, outside_plateaus, stddev=0.0):
+        y = outside_plateaus(x)
         for i in range(len(self.x_bounds)):
             x_min, x_max = self.x_bounds[i]
             x_in_bounds = np.logical_and(x_min <= x, x <= x_max)
@@ -72,11 +76,11 @@ class PlateauFunction(object):
                 out=in_bounds)
         return in_bounds
 
-    def with_function_outside_plateaus(self, f):
-        return self.__class__(self.heights, self.x_clusters, f)
-
-    def for_training(self, x, stddev=0.0):
-        y = self(np.squeeze(x)).astype('float32')
+    def for_training(self,
+                     x,
+                     stddev=0.0,
+                     outside_plateaus=lambda x: np.zeros(len(x))):
+        y = self(np.squeeze(x), outside_plateaus).astype('float32')
 
         ge = self.in_bounds(x)
         be = np.logical_not(ge)
