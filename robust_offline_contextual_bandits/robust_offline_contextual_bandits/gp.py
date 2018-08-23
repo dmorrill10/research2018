@@ -1,6 +1,8 @@
 import tensorflow as tf
 import numpy as np
 import GPy as gp_lib
+import os
+from glob import glob
 
 
 class GpMap(object):
@@ -28,8 +30,13 @@ class MultivariateNormalSampler(object):
 
 
 class GpAtInputs(object):
+    @classmethod
     def load(cls, name):
         return cls(*np.load('{}.npy'.format(name)))
+
+    @classmethod
+    def load_all(cls, pattern):
+        return [cls.load(os.path.splitext(file)[0]) for file in glob(pattern)]
 
     def __init__(self, mean, var, full_cov=True, maxtries=10):
         self.mean = mean
