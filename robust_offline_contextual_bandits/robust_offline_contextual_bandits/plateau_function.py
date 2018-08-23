@@ -1,5 +1,7 @@
 import tensorflow as tf
 import numpy as np
+import os
+from glob import glob
 from tf_supervised_inference.data import Data, NamedDataSets
 from tf_contextual_prediction_with_expert_advice import utility
 
@@ -63,7 +65,11 @@ class PlateauFunction(object):
 
     @classmethod
     def load(cls, name):
-        return cls(np.load('{}.npy'.format(name)))
+        return cls(*np.load('{}.npy'.format(name)))
+
+    @classmethod
+    def load_all(cls, pattern):
+        return [cls.load(os.path.splitext(file)[0]) for file in glob(pattern)]
 
     def __init__(self, heights, x_clusters):
         self.heights = heights
@@ -71,7 +77,8 @@ class PlateauFunction(object):
         self.x_bounds = [_bounds(x) for x in self.x_clusters]
 
     def save(self, name):
-        np.save('{}.npy'.format(name), [self.heights, self.x_clusters])
+        np.save('{}.npy'.format(name),
+                np.array([self.heights, self.x_clusters], dtype=object))
         return self
 
     def __call__(self, x, outside_plateaus=None, stddev=0.0):
