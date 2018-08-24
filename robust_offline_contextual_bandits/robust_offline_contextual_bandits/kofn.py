@@ -2,6 +2,7 @@ import tensorflow as tf
 import numpy as np
 from tensorflow.python.ops.resource_variable_ops import ResourceVariable
 import yaml
+from collections import namedtuple
 
 from tf_kofn_robust_policy_optimization.robust.kofn import \
     ContextualKofnGame, \
@@ -324,61 +325,6 @@ class KofnRrmpLearner(KofnRrmLearner):
         return 'RRM+-{}'.format(self.template.label())
 
 
-class KofnIterator(object):
-    def __init__(self, trainer, input_generator):
-        self._trainer = trainer
-        self._input_generator = input_generator
-
-    def __iter__(self):
-        return self
-
-    def __next__(self):
-        return self._trainer.step(next(self._input_generator))
-
-
-class KofnTrainer(object):
-    def __init__(self, reward_generator, learners):
-        self._t = tf.train.get_or_create_global_step()
-        self._t.assign(0)
-        self.reward_generator = reward_generator
-        self.learners = learners
-
-    @property
-    def t(self):
-        return int(self._t.numpy())
-
-    def start(self, input_generator):
-        return KofnIterator(self, input_generator)
-
-    def step(self, inputs):
-        reward = self.reward_generator(inputs)
-        losses = []
-        for learner in self.learners:
-            loss, grad = learner.loss_and_grad(inputs, reward)
-            losses.append(loss)
-            learner.apply(grad)
-        self._t.assign_add(1)
-        return losses
-
-    def evaluate(self, inputs, test_rewards=None):
-        evs = []
-        test_evs = []
-        _r = self.reward_generator(inputs)
-        for learner in self.learners:
-            game = learner(inputs, _r)
-
-            evs.append(game.root_ev.numpy())
-
-            if test_rewards is not None:
-                test_evs.append(
-                    tf.reduce_mean(
-                        utility(learner.policy(inputs), test_rewards)).numpy())
-        if test_rewards is None:
-            return evs
-        else:
-            return evs, test_evs
-
-
 class KofnTrainingData(object):
     @classmethod
     def empty(cls, num_learners):
@@ -400,8 +346,7 @@ class KofnTrainingData(object):
         return cls(
             sum([d._losses_over_time for d in data], []),
             sum([d._evs_over_time for d in data], []),
-            data[0].checkpoint_iterations
-        )
+            data[0].checkpoint_iterations)
 
     def __init__(self, losses_over_time, evs_over_time, checkpoint_iterations):
         assert len(losses_over_time) == len(evs_over_time)
@@ -412,7 +357,12 @@ class KofnTrainingData(object):
         self._evs_over_time = evs_over_time
         self.checkpoint_iterations = checkpoint_iterations
 
+    def __len__(self):
+        return len(self._losses_over_time)
+
     def __getitem__(self, i):
+        if i < 0:
+            i = len(self) - i
         return self.__class__(self._losses_over_time[i:i + 1],
                               self._evs_over_time[i:i + 1],
                               self.checkpoint_iterations)
@@ -442,6 +392,37 @@ class KofnTrainingData(object):
 
     def evs_now(self):
         return self.evs_over_time[:, -1]
+
+
+class KofnResults(object):
+    @classmethod
+    def combine(cls, *results):
+        return cls(
+            sum([r.learners for r in results]),
+            KofnTrainingData.combine([r.data for r in results]))
+
+    def __init__(self, learners, data):
+        assert len(learners) == len(data)
+        for i, learners_in_reality in enumerate(self.learners):
+            assert len(learners_in_reality) == len(data[i])
+        self.learners = learners
+        self.data = data
+
+    def lotor(self):
+        '''reality x learner x time'''
+        return np.array([d.losses_over_time for d in self.data])
+
+    def eotor(self):
+        '''reality x learner x time'''
+        return np.array([d.evs_over_time for d in self.data])
+
+    @property
+    def checkpoint_iterations(self):
+        return self.data[0].checkpoint_iterations
+
+    @property
+    def learner_names(self):
+        return [str(learner) for learner in self.learners[0]]
 
 
 class KofnTraining(object):
