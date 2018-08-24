@@ -212,7 +212,13 @@ def plot_percentile_performance(methods, baseline=None):
 
         if baseline in methods:
             ev_diff = method.evs - methods[baseline].evs
-            diff_plot.plot(x, ev_diff, label=name, linewidth=2, **method.style)
+            if method.num_reps() > 1:
+                mean, ci = mean_and_t_ci(ev_diff, axis=-1, confidence=0.95)
+                diff_plot.fill_between(x, (mean - ci).squeeze(),
+                                       (mean + ci).squeeze(), **method.style)
+            else:
+                mean = ev_diff
+            diff_plot.plot(x, mean, label=name, linewidth=2, **method.style)
 
     if baseline in methods:
         diff_plot.set_xlabel('percentile')
