@@ -8,6 +8,8 @@ try:
 except:
     files = None
 
+from robust_offline_contextual_bandits.data import mean_and_t_ci
+
 
 def tableu20_color_table():
     # These are the "Tableau 20" colors as RGB.
@@ -145,6 +147,9 @@ class NamedResults(object):
         self.style = style
         self.area = area
 
+    def avg_evs(self):
+        return self.evs.mean(axis=-1) if self.num_reps() > 1 else self.evs
+
     def percentile_normalization(self):
         return self.num_evs() / 100.0
 
@@ -154,11 +159,14 @@ class NamedResults(object):
     def num_evs(self):
         return len(self.evs)
 
+    def num_reps(self):
+        return self.evs.shape[1] if self.evs.ndim > 1 else 0
+
     def show_area(self):
         return self.area is not None
 
     def min_ev(self):
-        return min(self.evs)
+        return min(self.avg_evs())
 
     def area_beneath(self, min_ev=None):
         if min_ev is None:
@@ -169,7 +177,7 @@ class NamedResults(object):
 
         width = np.arange(lb_frac, ub_frac) / self.percentile_normalization()
         lb = np.full([ub_frac - lb_frac], min_ev)
-        ub = self.evs[lb_frac:ub_frac]
+        ub = self.avg_evs()[lb_frac:ub_frac]
         return width, lb, ub
 
 
@@ -231,7 +239,16 @@ def plot_percentile_performance(methods, baseline=None):
     for name, method in methods.items():
         x = method.percentile_points()
         inv_cdf_plot.plot(
-            x, method.evs, label=name, linewidth=2, **method.style)
+            x, method.avg_evs(), label=name, linewidth=2, **method.style)
+
+        if method.num_reps() > 1:
+            mean, ci = mean_and_t_ci(method.evs, axis=-1, confidence=0.95)
+            inv_cdf_plot.fill_between(
+                x,
+                (mean - ci).squeeze(),
+                (mean + ci).squeeze(),
+                **method.style
+            )
         if method.show_area():
             inv_cdf_plot.fill_between(*method.area_beneath(min_ev),
                                       **method.style)
