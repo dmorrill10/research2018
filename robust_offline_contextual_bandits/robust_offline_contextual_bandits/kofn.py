@@ -580,7 +580,8 @@ class KofnTraining(object):
 
         with self.kofn_timer:
             for iteration in range(self.num_iterations):
-                for losses in self.trainer.start(self.input_generator()):
+                for phi in self.input_generator():
+                    losses = self.trainer.step(phi)
                     if self.loss_measurement_is_missing():
                         for i in range(len(self.learners)):
                             self._data._losses_over_time[i].append(losses[i])
