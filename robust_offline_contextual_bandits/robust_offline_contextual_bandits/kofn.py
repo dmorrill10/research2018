@@ -430,7 +430,8 @@ class KofnTraining(object):
     def __init__(self,
                  trainer,
                  input_generator,
-                 reward_sampling_timer,
+                 reward_sampling_timer=None,
+                 kofn_timer=None,
                  num_iterations=1000,
                  num_ts_between_saving_checkpoints=1,
                  num_display_checkpoints=10):
@@ -439,9 +440,15 @@ class KofnTraining(object):
         self.num_iterations = num_iterations
         self.num_ts_between_saving_checkpoints = num_ts_between_saving_checkpoints
         self.num_display_checkpoints = num_display_checkpoints
+
+        if reward_sampling_timer is None:
+            reward_sampling_timer = AccumulatingTimer('reward sampling')
         self.reward_sampling_timer = reward_sampling_timer
 
-        self.kofn_timer = AccumulatingTimer('k-of-n training')
+        if kofn_timer is None:
+            kofn_timer = AccumulatingTimer('k-of-n training')
+        self.kofn_timer = kofn_timer
+
         self._data = KofnTrainingData.empty(len(self.learners))
 
     def save_data(self, name):
