@@ -2,16 +2,17 @@ import tensorflow as tf
 import numpy as np
 from tensorflow.python.ops.resource_variable_ops import ResourceVariable
 import yaml
-from collections import namedtuple
 
 from tf_kofn_robust_policy_optimization.robust.kofn import \
     ContextualKofnGame, \
     DeterministicKofnGameTemplate
-from tf_contextual_prediction_with_expert_advice import rm_policy, utility
+from tf_contextual_prediction_with_expert_advice import \
+    rm_policy, \
+    utility, \
+    norm_exp
 from tf_contextual_prediction_with_expert_advice.rrm import rrm_loss
 
 from robust_offline_contextual_bandits.policy import \
-    softmax, \
     sorted_values_across_worlds
 from simple_pytimer import AccumulatingTimer
 
@@ -95,7 +96,7 @@ class KofnRewardAugmentedMlLearner(KofnLearner):
         return pre_activations
 
     def loss(self, predictions, policy, kofn_utility):
-        r = softmax(kofn_utility, temp=1e-15)
+        r = norm_exp(kofn_utility, temp=1e-15)
         log_policy = tf.log(tf.clip_by_value(policy, 1e-15, 1 - 1e-15))
         return -tf.reduce_mean(r * log_policy)
 
@@ -118,7 +119,7 @@ class KofnLinearLossLearner(KofnLearner):
     '''Can't get this to work better than just predicting values/RRM and maybe it shouldn't.'''
 
     def policy_activation(self, pre_activations):
-        return softmax(pre_activations)
+        return norm_exp(pre_activations)
 
     def loss(self, predictions, policy, kofn_utility):
         return (-tf.reduce_mean(kofn_utility * predictions) + tf.reduce_mean(
@@ -241,7 +242,7 @@ class KofnRrmLearner(KofnMetaRmpLearner):
             [rm_policy]
             + list(
                 map(
-                    lambda temp: lambda x: softmax(x, self._adjusted_temperature(temp)),
+                    lambda temp: lambda x: norm_exp(x, self._adjusted_temperature(temp)),
                     softmax_temperatures
                 )
             )
@@ -281,7 +282,7 @@ class KofnSplitRrmLearner(KofnMetaRmpLearner):
             [lambda z: rm_policy(z[:, :-1] - z[:, -1:])]
             + list(
                 map(
-                    lambda temp: lambda z: softmax(z[:, :-1], self._adjusted_temperature(temp)),
+                    lambda temp: lambda z: norm_exp(z[:, :-1], self._adjusted_temperature(temp)),
                     softmax_temperatures
                 )
             )
