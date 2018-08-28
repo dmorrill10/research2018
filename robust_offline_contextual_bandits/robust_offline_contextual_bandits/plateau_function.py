@@ -19,8 +19,8 @@ def slope_and_bias_across_constants_for_unknown_outputs(
         f(x, outside_plateaus=lambda x: np.full([len(x)], float(i)))
         for f in plateau_functions
     ] for i in range(2)])
-    bias = tf.reduce_mean(utility(policy, test_rewards[0]))
-    slope = tf.reduce_mean(utility(policy, test_rewards[1])) - bias
+    bias = tf.reduce_mean(utility(policy, test_rewards[0].T))
+    slope = tf.reduce_mean(utility(policy, test_rewards[1].T)) - bias
     return slope, bias
 
 
