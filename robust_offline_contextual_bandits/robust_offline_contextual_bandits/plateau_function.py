@@ -69,7 +69,10 @@ class PlateauFunction(object):
 
     @classmethod
     def load_all(cls, pattern):
-        return [cls.load(os.path.splitext(file)[0]) for file in glob(pattern)]
+        return {
+            file: cls.load(os.path.splitext(file)[0])
+            for file in glob(pattern)
+        }
 
     def __init__(self, heights, x_clusters):
         self.heights = heights

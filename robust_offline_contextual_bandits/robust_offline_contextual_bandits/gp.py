@@ -36,7 +36,10 @@ class GpAtInputs(object):
 
     @classmethod
     def load_all(cls, pattern):
-        return [cls.load(os.path.splitext(file)[0]) for file in glob(pattern)]
+        return {
+            file: cls.load(os.path.splitext(file)[0])
+            for file in glob(pattern)
+        }
 
     def __init__(self, mean, var, full_cov=True, maxtries=10):
         self.mean = mean
