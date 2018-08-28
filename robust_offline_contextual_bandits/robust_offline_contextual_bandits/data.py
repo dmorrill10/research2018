@@ -15,14 +15,28 @@ def mean_and_t_ci(a, axis=-1, confidence=0.95):
 
 
 class HomogeneousDataGatherer(object):
-    def __init__(self):
+    def __init__(self, *dimensions):
         self._data = []
+        self._dimensions = dimensions
 
     def np(self, *dimensions):
-        return np.array(self._data).reshape(dimensions)
+        a = np.array(self._data)
+        if len(dimensions) > 0:
+            a = a.reshape(dimensions)
+        elif len(self._dimensions) > 0:
+            a = a.reshape(self._dimensions)
+        return a
 
     def tf(self, *dimensions):
-        return tf.stack(self._data).reshape(dimensions)
+        a = tf.stack(self._data)
+        if len(dimensions) > 0:
+            a = tf.reshape(a, dimensions)
+        elif len(self._dimensions) > 0:
+            a = tf.reshape(a, self._dimensions)
+        return a
+
+    def set_dimensions(self, *dimensions):
+        self._dimensions = dimensions
 
     def append(self, datum):
         self._data.append(datum)
