@@ -42,7 +42,7 @@ class TileCodingCompetitor(Competitor):
                  num_actions,
                  policy_model_factory=RrmPolicyModel,
                  learning_rate_scale=1.0):
-        rep = self.__call__.new_rep(num_tilings, num_tiles, x)
+        rep = self.__class__.new_rep(num_tilings, num_tiles, x)
         policy_model = policy_model_factory(
             new_ff_policy_model(num_actions, rep.num_features()))
         super(TileCodingCompetitor, self).__init__(
