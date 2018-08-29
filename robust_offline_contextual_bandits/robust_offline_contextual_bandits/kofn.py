@@ -577,29 +577,30 @@ class KofnTraining(object):
         return self.trainer.evaluate(self.next_input())
 
     def run(self):
-        if self.checkpoint_is_missing():
-            evs = self.evaluate()
-
-            for i in range(len(self.learners)):
-                self._data._evs_over_time[i].append(evs[i])
-            self._data.checkpoint_iterations.append(self.t)
-
-            print('{}: ev: {}'.format(self.t, evs))
+        # if self.checkpoint_is_missing():
+        #     evs = self.evaluate()
+        #
+        #     for i in range(len(self.learners)):
+        #         self._data._evs_over_time[i].append(evs[i])
+        #     self._data.checkpoint_iterations.append(self.t)
+        #
+        #     print('{}: ev: {}'.format(self.t, evs))
 
         with self.kofn_timer:
             for iteration in range(self.num_iterations):
                 for phi in self.input_generator():
-                    losses = self.trainer.step(phi)
-                    if self.loss_measurement_is_missing():
-                        for i in range(len(self.learners)):
-                            self._data._losses_over_time[i].append(losses[i])
+                    losses, evs = self.trainer.step(phi)
+
+                    # TODO This is unneccessary
+                    for i in range(len(self.learners)):
+                        self._data._evs_over_time[i].append(evs[i])
+                        self._data._losses_over_time[i].append(losses[i])
+
+                    # if self.loss_measurement_is_missing():
+                    #     for i in range(len(self.learners)):
+                    #         self._data._losses_over_time[i].append(losses[i])
 
                     if self.is_checkpoint_iteration():
-                        evs = self.evaluate()
-
-                        for i in range(len(self.learners)):
-                            self._data._evs_over_time[i].append(evs[i])
-                            self._data._losses_over_time[i].append(losses[i])
                         self._data.checkpoint_iterations.append(self.t)
 
                     if self.is_display_iteration():
