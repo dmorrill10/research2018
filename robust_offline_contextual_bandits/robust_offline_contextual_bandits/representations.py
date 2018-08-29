@@ -1,4 +1,5 @@
 import tensorflow as tf
+import numpy as np
 from robust_offline_contextual_bandits.tile_coding import \
     tile_coding_dense_feature_expansion
 
@@ -26,9 +27,10 @@ class RawRepresentationWithFixedInputs(RepresentationWithFixedInputs):
 
 
 class TileCodingRepresentationWithFixedInputs(RepresentationWithFixedInputs):
-    def __init__(self, bounds, num_tilings, num_tiles, x):
+    def __init__(self, num_tilings, num_tiles, x):
         self.num_tilings = num_tilings
         self.num_tiles = num_tiles
+        bounds = list(zip(np.min(x, axis=0), np.max(x, axis=0)))
         _phi_f, _ = tile_coding_dense_feature_expansion(
             bounds, num_tilings, num_tiles)
 
@@ -45,6 +47,20 @@ class TileCodingRepresentationWithFixedInputs(RepresentationWithFixedInputs):
 
 class TabularRepresentationWithFixedInputs(
         TileCodingRepresentationWithFixedInputs):
-    def __init__(self, bounds, x):
+    def __init__(self, x):
         super(TabularRepresentationWithFixedInputs, self).__init__(
-            bounds, 1, len(x), x)
+            1, len(x), x)
+
+
+class LiftAndProjectRepresentationWithFixedInputs(
+        RepresentationWithFixedInputs):
+    def __init__(self, x):
+        def phi_f(x):
+            x = tf.convert_to_tensor(x)
+            if len(x.shape) < 2:
+                x = tf.expand_dims(x, axis=1)
+            norm = tf.norm(x, axis=1, keepdims=True)
+            return tf.concat([x, tf.ones(tf.shape(x)[0])], axis=1) / norm
+
+        super(LiftAndProjectRepresentationWithFixedInputs, self).__init__(
+            phi_f, x)
