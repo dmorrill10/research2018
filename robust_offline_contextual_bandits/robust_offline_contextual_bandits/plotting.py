@@ -255,3 +255,22 @@ def plot_policies(kofn_learners, phi, x, action_colors, num_rows=1):
         plt.title('{}'.format(kofn_learners[i]))
     plt.tight_layout()
     return fig, axes_list
+
+
+def plot_ev_curves(styles_list,
+                   evs_means,
+                   evs_ci,
+                   checkpoint_iterations,
+                   alpha=0.5):
+    for i, styles in enumerate(styles_list):
+        plt.plot(checkpoint_iterations, evs_means[i], **styles)
+        plt.fill_between(
+            checkpoint_iterations,
+            evs_means[i] - evs_ci[i],
+            evs_means[i] + evs_ci[i],
+            alpha=alpha,
+            **{i: styles[i]
+               for i in styles if i != 'label'})
+    plt.legend()
+    plt.xlabel('iteration')
+    plt.ylabel('training EV')
