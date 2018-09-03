@@ -1,8 +1,4 @@
 import tensorflow as tf
-try:
-    tf.enable_eager_execution()
-except:
-    pass
 from robust_offline_contextual_bandits.named_results import NamedResults
 import numpy as np
 
