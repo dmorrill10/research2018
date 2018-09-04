@@ -104,3 +104,13 @@ def load_or_save(load, save):
         return g
 
     return f
+
+
+def load_list(load):
+    def f(*args, **kwargs):
+        l = load(*args, **kwargs)
+        if len(l) < 1:
+            raise FileNotFoundError('No files found.')
+        return l
+
+    return f
