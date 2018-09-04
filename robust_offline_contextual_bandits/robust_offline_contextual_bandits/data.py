@@ -2,6 +2,14 @@ from collections import namedtuple
 import scipy.stats as st
 import numpy as np
 import tensorflow as tf
+import os
+try:
+    from pydrive.auth import GoogleAuth
+    from pydrive.drive import GoogleDrive
+    from google.colab import auth
+    from oauth2client.client import GoogleCredentials
+except:
+    pass
 
 DataComponentsForTraining = namedtuple(
     'DataComponentsForTraining',
@@ -40,3 +48,42 @@ class HomogeneousDataGatherer(object):
 
     def append(self, datum):
         self._data.append(datum)
+
+
+class GoogleDriveWrapper(object):
+    def __init__(self):
+        auth.authenticate_user()
+        self.gauth = GoogleAuth()
+        self.gauth.credentials = GoogleCredentials.get_application_default()
+        self.drive = GoogleDrive(self.gauth)
+
+    def save(self, path, gd_dir_id=None):
+        metadata = {'title': os.path.basename(path)}
+        if gd_dir_id is not None:
+            metadata['parents'] = [{
+                'kind': 'drive#childList',
+                'id': gd_dir_id
+            }]
+        file = self.drive.CreateFile(metadata)
+        file.SetContentFile(path)
+        file.Upload()
+        return self
+
+    def ls(self, gd_dir_id):
+        return [
+            file_info['title']
+            for file_info in self.drive.ListFile({
+                'q':
+                "'{}' in parents".format(gd_dir_id)
+            }).GetList()
+        ]
+
+    def load(self, file_name=None, gd_dir_id=None):
+        query = {}
+        if gd_dir_id is not None:
+            query['q'] = "'{}' in parents".format(gd_dir_id)
+        for file_info in self.drive.ListFile(query).GetList():
+            if file_name is None or file_info['title'] == file_name:
+                f = self.drive.CreateFile({'id': file_info['id']})
+                f.GetContentFile(file_info['title'])
+        return self
