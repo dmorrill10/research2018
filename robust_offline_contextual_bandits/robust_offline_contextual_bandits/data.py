@@ -87,3 +87,20 @@ class GoogleDriveWrapper(object):
                 f = self.drive.CreateFile({'id': file_info['id']})
                 f.GetContentFile(file_info['title'])
         return self
+
+
+def load_or_save(load, save):
+    def f(compute):
+        def g(*args, **kwargs):
+            try:
+                payload = load()
+                tf.logging.info('Loaded data...')
+            except:
+                tf.logging.info('Computing and saving data...')
+                payload = compute(*args, **kwargs)
+                save(payload)
+            return payload
+
+        return g
+
+    return f
