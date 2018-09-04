@@ -86,3 +86,9 @@ def new_low_rank_ff_policy_model(num_actions,
         tf.keras.layers.Dense(
             num_actions, use_bias=True, activation=output_activation))
     return tf.keras.Sequential(layers)
+
+
+def uniform_random_or_policy(rows_to_play_random, policy):
+    policy = np.copy(policy)
+    policy[rows_to_play_random] = 1.0 / policy.shape[1]
+    return policy
