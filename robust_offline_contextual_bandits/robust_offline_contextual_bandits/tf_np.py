@@ -34,3 +34,10 @@ def load_model_from_yml(name):
     loaded_model = tf.keras.models.model_from_yaml(loaded_model_yaml)
     loaded_model.load_weights('{}.h5'.format(name))
     return loaded_model
+
+
+def logical_or(*a):
+    v = np.full(a[0].shape, False)
+    for ai in a:
+        np.logical_or(v, ai, v)
+    return v
