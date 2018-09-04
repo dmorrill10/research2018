@@ -55,3 +55,34 @@ def new_ff_policy_model(num_actions,
                 activation=output_activation)
         ]
     return tf.keras.Sequential(layers)
+
+
+def new_low_rank_ff_policy_model(num_actions,
+                                 num_features,
+                                 num_units,
+                                 initial_expansion=True,
+                                 rank=1,
+                                 num_hidden=1,
+                                 hidden_activation=tf.nn.relu,
+                                 output_activation=None):
+    layers = []
+    if initial_expansion:
+        layers.append(
+            tf.keras.layers.Dense(
+                num_units,
+                activation=hidden_activation,
+                use_bias=True,
+                input_shape=(None, num_features)))
+        num_hidden -= 1
+    for i in range(num_hidden):
+        layers.append(
+            tf.keras.layers.Dense(
+                rank, use_bias=True, input_shape=(None, num_features)))
+        layers.append(
+            tf.keras.layers.Dense(
+                num_units, activation=hidden_activation, use_bias=True))
+
+    layers.append(
+        tf.keras.layers.Dense(
+            num_actions, use_bias=True, activation=output_activation))
+    return tf.keras.Sequential(layers)
