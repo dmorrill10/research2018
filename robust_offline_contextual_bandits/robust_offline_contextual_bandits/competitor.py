@@ -52,18 +52,13 @@ class TileCodingCompetitor(Competitor):
 
 class NnCompetitor(Competitor):
     def __init__(self,
-                 num_units,
+                 network_factory,
                  x,
-                 num_actions,
                  optimizer,
                  policy_model_factory=RrmPolicyModel):
         rep = self.__class__.new_rep(x)
         policy_model = policy_model_factory(
-            new_ff_policy_model(
-                num_actions,
-                rep.num_features(),
-                num_hidden=1,
-                num_units1=num_units))
+            network_factory(rep.num_features()))
         super(NnCompetitor, self).__init__(rep, policy_model, optimizer)
 
 
