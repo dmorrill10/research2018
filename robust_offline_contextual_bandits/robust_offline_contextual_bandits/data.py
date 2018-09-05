@@ -81,7 +81,10 @@ class GoogleDriveWrapper(object):
     def load(self, file_name=None, gd_dir_id=None):
         query = {}
         if gd_dir_id is not None:
-            query['q'] = "'{}' in parents".format(gd_dir_id)
+            query['q'] = "'{}' in parents and trashed=false".format(gd_dir_id)
+        if file_name is not None:
+            query['orderBy'] = 'modifiedDate desc'
+            query['maxResults'] = 1
         for file_info in self.drive.ListFile(query).GetList():
             if file_name is None or file_info['title'] == file_name:
                 f = self.drive.CreateFile({'id': file_info['id']})
