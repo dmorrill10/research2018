@@ -60,7 +60,7 @@ class LiftAndProjectRepresentationWithFixedInputs(
             if len(x.shape) < 2:
                 x = tf.expand_dims(x, axis=1)
             norm = tf.norm(x, axis=1, keepdims=True)
-            return tf.concat([x, tf.ones(tf.shape(x)[0])], axis=1) / norm
+            return tf.concat([x, tf.ones([tf.shape(x)[0], 1])], axis=1) / norm
 
         super(LiftAndProjectRepresentationWithFixedInputs, self).__init__(
             phi_f, x)
