@@ -106,13 +106,15 @@ class TileCodingRepresentation(object):
         self.num_tiles = np.array(num_tiles, dtype=int)
         self.num_tilings = num_tilings
         self._hash_table = IHT(memory_size)
-        state_dimension_boundaries = np.array(state_dimension_boundaries)
-
-        self.space_widths = (state_dimension_boundaries[:, 1] -
-                             state_dimension_boundaries[:, 0])
-        self._state_dimension_offsets = state_dimension_boundaries[:, 0]
         self._num_features = (
-            self.num_actions * self.num_tilings * np.prod(self.num_tiles + 1))
+            self.num_actions * self.num_tilings * np.prod(self.num_tiles))
+        state_dimension_boundaries = np.array(state_dimension_boundaries)
+        self._state_dimension_offsets = state_dimension_boundaries[:, 0]
+        self.space_widths = (
+            state_dimension_boundaries[:, 1] - self._state_dimension_offsets)
+        tile_width = self.space_widths / num_tiles
+        insensitivity_width = tile_width / num_tilings
+        self.space_widths += insensitivity_width / 2.0
         self._state_dimension_scalings = self.num_tiles / self.space_widths
 
     def num_features(self):
