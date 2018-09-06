@@ -45,11 +45,13 @@ class TileCodingRepresentationWithFixedInputs(RepresentationWithFixedInputs):
         return float(self.num_tiles) / self.num_tilings
 
 
-class TabularRepresentationWithFixedInputs(
-        TileCodingRepresentationWithFixedInputs):
+class TabularRepresentationWithFixedInputs(RepresentationWithFixedInputs):
     def __init__(self, x):
         super(TabularRepresentationWithFixedInputs, self).__init__(
-            1, len(x), x)
+            lambda x: tf.eye(len(x)), x)
+
+    def learning_rate(self):
+        return float(self.num_examples())
 
 
 class LiftAndProjectRepresentationWithFixedInputs(
