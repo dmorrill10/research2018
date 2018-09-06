@@ -42,7 +42,7 @@ class TileCodingRepresentationWithFixedInputs(RepresentationWithFixedInputs):
         super(TileCodingRepresentationWithFixedInputs, self).__init__(phi_f, x)
 
     def learning_rate(self):
-        return float(self.num_tiles) / self.num_tilings
+        return float(self.num_examples()) / self.num_tilings
 
 
 class TabularRepresentationWithFixedInputs(RepresentationWithFixedInputs):
