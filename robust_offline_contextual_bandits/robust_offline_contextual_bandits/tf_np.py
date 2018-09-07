@@ -1,12 +1,15 @@
 import tensorflow as tf
+from tensorflow.python.eager import context
 import numpy as np
 
 
 def enable_eager():
-    try:
-        tf.enable_eager_execution()
-    except:
-        pass
+    if context._default_mode != context.EAGER_MODE:
+        context._context = None
+        try:
+            tf.enable_eager_execution()
+        except:
+            pass
     assert tf.executing_eagerly()
 
 
