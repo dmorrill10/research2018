@@ -1,164 +1,120 @@
 import numpy as np
 
 
-class IHT:
-    """
-    Structure to handle collisions taken from:
-
-    Tile Coding Software version 3.0beta
-    by Rich Sutton
-    based on a program created by Steph Schaeffer and others
-    """
-
-    def __init__(self, sizeval):
-        self.size = sizeval
-        self.overfullCount = 0
+class Indexer:
+    def __init__(self):
         self.dictionary = {}
 
     def __str__(self):
-        """Prepares a string for printing whenever this object is printed"""
-        return "Collision table:" + \
-               " size:" + str(self.size) + \
-               " overfullCount:" + str(self.overfullCount) + \
-               " dictionary:" + str(len(self.dictionary)) + " items"
+        return str(self.dictionary)
 
-    def count(self):
+    def __len__(self):
         return len(self.dictionary)
 
-    def fullp(self):
-        return len(self.dictionary) >= self.size
+    def __contains__(self, obj):
+        return obj in self.dictionary
 
-    def getindex(self, obj, readonly=False):
-        d = self.dictionary
-        if obj in d:
-            return d[obj]
-        elif readonly:
-            return None
-        size = self.size
-        count = self.count()
-        if count >= size:
-            if self.overfullCount == 0:
-                print('IHT full, starting to allow collisions')
-            self.overfullCount += 1
-            return hash(obj) % self.size
-        else:
-            d[obj] = count
-            return count
+    def __getitem__(self, obj):
+        if obj not in self.dictionary:
+            self.dictionary[obj] = len(self)
+        return self.dictionary[obj]
 
 
 class TileCoding(object):
-    def __init__(self):
-        self._cache = {}
-
-    def on_tiles(self, ihtORsize, numtilings, floats, *actions):
-        '''
-        Many of the computations in tile3's tile depends only on the number of
-        tilings. These values can be cached to speedup feature retrieval when
-        particular numbers of tilings are used frequently. Converting a numpy
-        array to a tuple is expensive though, but converting to a byte string
-        representation is fast. The state and action portions of the hash
-        keys can then be computed separately and combined just before retrieval.
-
-        For the first 5 200-run episodes in Q1 P2, using tiles from tiles3
-        takes about 58.76 seconds, or 11.75 s/run. This method completes the same
-        runs in 45.12 s, or 9.024 s/run, thereby providing a 30% speedup.
-        '''
-        if numtilings not in self._cache:
-            self._cache[numtilings] = {}
-            a = np.arange(numtilings)
-            a = a.reshape([numtilings, 1])
-            tilingX2 = (2 * a).repeat(len(floats) - 1, axis=1)
-
-            b = (np.hstack([a, tilingX2]).cumsum(axis=1) + 1e-6) / numtilings
-            adjusted_floats = np.hstack([a, b.copy()])
-            self._cache[numtilings] = (b, adjusted_floats,
-                                       adjusted_floats.view(int))
-        b, adjusted_floats, truncated_adjusted_floats = self._cache[numtilings]
-        np.add(b, floats, out=adjusted_floats[:, 1:])
-
-        # In-place conversion to ints
-        truncated_adjusted_floats[:, 1:] = adjusted_floats[:, 1:]
-
-        state_coord_keys = [
-            truncated_adjusted_floats[tiling, :].tobytes()
-            for tiling in range(numtilings)
-        ]
-        tiles = []
-        for action in actions:
-            action_key = bytes(action)
-            tiles.append([
-                ihtORsize.getindex(state_key + action_key, False)
-                for state_key in state_coord_keys
-            ])
-        return tiles
-
-
-class TileCodingRepresentation(object):
     def __init__(self,
-                 tile_coding,
-                 state_dimension_boundaries,
-                 num_tilings,
-                 num_tiles,
-                 memory_size=4096,
-                 num_actions=1):
-        self.tile_coding = tile_coding
-        self.num_actions = num_actions
-        self.num_tiles = np.array(num_tiles, dtype=int)
-        self.num_tilings = num_tilings
-        self._hash_table = IHT(memory_size)
-        self._num_features = (
-            self.num_actions * self.num_tilings * np.prod(self.num_tiles))
-        state_dimension_boundaries = np.array(state_dimension_boundaries)
-        self._state_dimension_offsets = state_dimension_boundaries[:, 0]
-        self.space_widths = (
-            state_dimension_boundaries[:, 1] - self._state_dimension_offsets)
-        tile_width = self.space_widths / num_tiles
-        insensitivity_width = tile_width / num_tilings
-        self.space_widths += insensitivity_width / 2.0
-        self._state_dimension_scalings = self.num_tiles / self.space_widths
+                 tile_widths=(1.0, ),
+                 num_tiling_pairs=0,
+                 min_position=None,
+                 max_position=None):
+        self._table = Indexer()
+        self.tile_widths = np.array(tile_widths)
+        half_tile_widths = self.tile_widths / 2.0
 
-    def num_features(self):
-        return self._num_features
+        tiling_shifts = [half_tile_widths]
+        for i in range(num_tiling_pairs):
+            cumulative_offset = (i + 1) * half_tile_widths / (
+                num_tiling_pairs + 1)
+            tiling_shifts.append(tiling_shifts[0] + cumulative_offset)
+            tiling_shifts.append(tiling_shifts[0] - cumulative_offset)
+        self._tiling_shifts = np.array(tiling_shifts)
+        self._tiles_for_position = np.concatenate(
+            [
+                np.expand_dims(
+                    np.arange(2 * num_tiling_pairs + 1, dtype=int), axis=1),
+                np.zeros(self._tiling_shifts.shape, dtype=int)
+            ],
+            axis=1)
 
-    def on(self, state, *actions):
-        return self.tile_coding.on_tiles(
-            self._hash_table, self.num_tilings,
-            ((state - self._state_dimension_offsets) *
-             self._state_dimension_scalings), *actions)
+        self._min_position = min_position
+        self._max_position = max_position
 
-    def features_from_on(self, on):
-        x = np.zeros([self.num_features()], dtype=int)
-        x.put(on, 1)
+    def num_tiles(self, min_position=None, max_position=None):
+        if min_position is None:
+            min_position = 0.0 if self._min_position is None else self._min_position
+        if max_position is None:
+            max_position = self._max_position
+        return ((np.array(max_position) - np.array(min_position)) /
+                self.tile_widths).astype(int) + 1
+
+    def num_features(self, min_position=None, max_position=None):
+        return self.num_tilings() * np.prod(
+            self.num_tiles(min_position, max_position))
+
+    def num_tilings(self):
+        return self._tiling_shifts.shape[0]
+
+    def resolution(self):
+        return self.tile_widths / self.num_tilings()
+
+    def on(self, position, min_position=None):
+        if min_position is None:
+            min_position = 0 if self._min_position is None else self._min_position
+        position -= np.array(min_position)
+        assert not np.any(position < 0.0)
+        self._tiles_for_position[:, 1:] = ((
+            position + self._tiling_shifts) / self.tile_widths)
+
+        return [
+            self._table[tiling.tobytes()]
+            for tiling in self._tiles_for_position
+        ]
+
+    def features(self, position, min_position=None, max_position=None):
+        x = np.zeros(
+            [self.num_features(min_position, max_position)], dtype=int)
+        x.put(self.on(position, min_position), 1)
         return x
 
 
 def tile_coding_dense_feature_expansion(state_dimension_boundaries,
-                                        num_tilings, num_tiles):
-    state_bucketer = TileCodingRepresentation(
-        TileCoding(),
-        state_dimension_boundaries=state_dimension_boundaries,
-        num_tilings=num_tilings,
-        num_tiles=num_tiles,
-        memory_size=4 * 410 * num_tilings)
+                                        num_tiling_pairs,
+                                        tile_width_fractions=(1.0, )):
+    min_position, max_position = zip(*state_dimension_boundaries)
+    state_bucketer = TileCoding(
+        tile_widths=np.array(state_dimension_boundaries) *
+        np.array(tile_width_fractions),
+        num_tiling_pairs=num_tiling_pairs,
+        min_position=min_position,
+        max_position=max_position)
 
     def tile_coding_features(state):
-        on = state_bucketer.on(state, 0)
-        assert len(on) == 1
-        return state_bucketer.features_from_on(on[0])
+        return state_bucketer.features(state)
 
     return tile_coding_features, state_bucketer.num_features()
 
 
 def tile_coding_sparse_feature_expansion(state_dimension_boundaries,
-                                         num_tilings, num_tiles):
-    state_bucketer = TileCodingRepresentation(
-        TileCoding(),
-        state_dimension_boundaries=state_dimension_boundaries,
-        num_tilings=num_tilings,
-        num_tiles=num_tiles,
-        memory_size=4 * 410 * num_tilings)
+                                         num_tiling_pairs,
+                                         tile_width_fractions=(1.0, )):
+    min_position, max_position = zip(*state_dimension_boundaries)
+    state_bucketer = TileCoding(
+        tile_widths=np.array(state_dimension_boundaries) *
+        np.array(tile_width_fractions),
+        num_tiling_pairs=num_tiling_pairs,
+        min_position=min_position,
+        max_position=max_position)
 
     def tile_coding_features(state):
-        return state_bucketer.on(state, 0)[0]
+        return state_bucketer.on(state)
 
     return tile_coding_features, state_bucketer.num_features()
