@@ -27,7 +27,7 @@ class RawRepresentationWithFixedInputs(RepresentationWithFixedInputs):
 
 
 class TileCodingRepresentationWithFixedInputs(RepresentationWithFixedInputs):
-    def __init__(self, num_tilings, x, tile_width_fractions=(1.0, )):
+    def __init__(self, num_tilings, x, tile_width_fractions=None):
         self.num_tilings = num_tilings
         bounds = list(zip(np.min(x, axis=0), np.max(x, axis=0)))
         _phi_f, _ = tile_coding_dense_feature_expansion(

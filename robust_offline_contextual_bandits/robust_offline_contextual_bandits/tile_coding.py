@@ -88,11 +88,15 @@ class TileCoding(object):
 
 def tile_coding_dense_feature_expansion(state_dimension_boundaries,
                                         num_tiling_pairs,
-                                        tile_width_fractions=(1.0, )):
+                                        tile_width_fractions=None):
     min_position, max_position = zip(*state_dimension_boundaries)
+
+    if tile_width_fractions is None:
+        tile_width_fractions = [1.0] * len(min_position)
+
     state_bucketer = TileCoding(
-        tile_widths=np.array(state_dimension_boundaries) *
-        np.array(tile_width_fractions),
+        tile_widths=((np.array(max_position) - np.array(min_position)) *
+                     np.array(tile_width_fractions)),
         num_tiling_pairs=num_tiling_pairs,
         min_position=min_position,
         max_position=max_position)
@@ -105,8 +109,12 @@ def tile_coding_dense_feature_expansion(state_dimension_boundaries,
 
 def tile_coding_sparse_feature_expansion(state_dimension_boundaries,
                                          num_tiling_pairs,
-                                         tile_width_fractions=(1.0, )):
+                                         tile_width_fractions=None):
     min_position, max_position = zip(*state_dimension_boundaries)
+
+    if tile_width_fractions is None:
+        tile_width_fractions = [1.0] * len(min_position)
+
     state_bucketer = TileCoding(
         tile_widths=np.array(state_dimension_boundaries) *
         np.array(tile_width_fractions),
