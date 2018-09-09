@@ -31,19 +31,19 @@ class TabularCompetitor(Competitor):
 
 class TileCodingCompetitor(Competitor):
     @classmethod
-    def new_rep(cls, num_tilings, x, tile_width_fractions=None):
+    def new_rep(cls, num_tiling_pairs, x, tile_width_fractions=None):
         return TileCodingRepresentationWithFixedInputs(
-            num_tilings, x, tile_width_fractions=tile_width_fractions)
+            num_tiling_pairs, x, tile_width_fractions=tile_width_fractions)
 
     def __init__(self,
-                 num_tilings,
+                 num_tiling_pairs,
                  x,
                  num_actions,
                  policy_model_factory=RrmPolicyModel,
                  learning_rate_scale=1.0,
                  tile_width_fractions=None):
         rep = self.__class__.new_rep(
-            num_tilings, x, tile_width_fractions=tile_width_fractions)
+            num_tiling_pairs, x, tile_width_fractions=tile_width_fractions)
         policy_model = policy_model_factory(
             new_ff_policy_model(num_actions, rep.num_features()))
         super(TileCodingCompetitor, self).__init__(
