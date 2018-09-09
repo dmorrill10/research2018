@@ -25,8 +25,8 @@ class TabularCompetitor(Competitor):
         rep = self.__class__.new_rep(x)
         policy_model = policy_model_factory(
             new_ff_policy_model(num_actions, rep.num_features()))
-        super(TabularCompetitor, self).__init__(rep, policy_model,
-                                                new_t_inv_gd_optimizer(1.0))
+        optimizer = new_t_inv_gd_optimizer(rep.learning_rate())
+        super(TabularCompetitor, self).__init__(rep, policy_model, optimizer)
 
 
 class TileCodingCompetitor(Competitor):
