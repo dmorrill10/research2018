@@ -133,6 +133,13 @@ class TaggedDatum(UserDict):
     def __call__(self):
         return self._payload
 
+    @property
+    def tags(self):
+        return self.data
+
+    def with_tags(self, new_payload):
+        return self.__class__(new_payload, **self.tags)
+
 
 class TaggedData(UserList):
     def append(self, item, **tags):

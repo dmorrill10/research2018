@@ -19,6 +19,12 @@ class DataTest(tf.test.TestCase):
         assert b2[0]['c'] is None
         assert b2[0]() == 'd1'
 
+        patient = b2[0].with_tags('d5')
+        assert b2[0]['a'] == 1
+        assert b2[0]['b'] == 2
+        assert b2[0]['c'] is None
+        assert patient() == 'd5'
+
 
 if __name__ == '__main__':
     tf.test.main()
