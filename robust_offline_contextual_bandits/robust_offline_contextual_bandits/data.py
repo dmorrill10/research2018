@@ -1,4 +1,4 @@
-from collections import namedtuple
+from collections import namedtuple, UserList, UserDict
 import scipy.stats as st
 import numpy as np
 import tensorflow as tf
@@ -117,3 +117,23 @@ def load_list(load):
         return l
 
     return f
+
+
+class TaggedDatum(UserDict):
+    def __init__(self, payload, **tags):
+        super().__init__(tags)
+        self._payload = payload
+
+    def __missing__(self, key):
+        return None
+
+    def __eq__(self, other):
+        return self() == other() and UserDict.__eq__(self, other)
+
+    def __call__(self):
+        return self._payload
+
+
+class TaggedData(UserList):
+    def append(self, item, **tags):
+        super().append(TaggedDatum(item, **tags))
