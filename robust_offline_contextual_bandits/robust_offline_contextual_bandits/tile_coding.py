@@ -69,10 +69,10 @@ class TileCoding(object):
     def on(self, position, min_position=None):
         if min_position is None:
             min_position = 0 if self._min_position is None else self._min_position
-        position -= np.array(min_position)
-        assert not np.any(position < 0.0)
+        shifted_position = position - np.array(min_position)
+        assert not np.any(shifted_position < 0.0)
         self._tiles_for_position[:, 1:] = ((
-            position + self._tiling_shifts) / self.tile_widths)
+            shifted_position + self._tiling_shifts) / self.tile_widths)
 
         return [
             self._table[tiling.tobytes()]
