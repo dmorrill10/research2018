@@ -104,7 +104,8 @@ def tile_coding_dense_feature_expansion(state_dimension_boundaries,
     def tile_coding_features(state):
         return state_bucketer.features(state)
 
-    return tile_coding_features, state_bucketer.num_features()
+    learning_rate = 1.0 / (2 * num_tiling_pairs + 1.0)
+    return tile_coding_features, state_bucketer.num_features(), learning_rate
 
 
 def tile_coding_sparse_feature_expansion(state_dimension_boundaries,
@@ -125,4 +126,5 @@ def tile_coding_sparse_feature_expansion(state_dimension_boundaries,
     def tile_coding_features(state):
         return state_bucketer.on(state)
 
-    return tile_coding_features, state_bucketer.num_features()
+    learning_rate = 1.0 / (2 * num_tiling_pairs + 1.0)
+    return tile_coding_features, state_bucketer.num_features(), learning_rate

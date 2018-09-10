@@ -5,10 +5,53 @@ from robust_offline_contextual_bandits.tile_coding import \
 
 
 class RepresentationWithFixedInputs(object):
-    def __init__(self, phi_f, x):
-        self.phi_f = phi_f
-        self.x = x
-        self.phi = phi_f(x)
+    @classmethod
+    def transform(cls, x, phi_f=lambda y: tf.convert_to_tensor(y), **kwargs):
+        return cls(phi_f(x), **kwargs)
+
+    @classmethod
+    def dense_tile_coding(cls,
+                          x,
+                          num_tiling_pairs,
+                          tile_width_fractions=None,
+                          **kwargs):
+        bounds = list(zip(np.min(x, axis=0), np.max(x, axis=0)))
+        _phi_f, _, lr = tile_coding_dense_feature_expansion(
+            bounds, num_tiling_pairs, tile_width_fractions)
+
+        def phi_f(x):
+            return (
+                tf.stack([_phi_f(state).astype('float32') for state in x])
+                if len(x) > 0
+                else tf.convert_to_tensor(_phi_f(x).astype('float32'))
+            )  # yapf:disable
+        return cls(phi_f(x), lr, **kwargs)
+
+    @classmethod
+    def tabular(cls, x, **kwargs):
+        return cls(tf.eye(len(x)), **kwargs)
+
+    @classmethod
+    def lift_and_project(cls, x, **kwargs):
+        x = tf.convert_to_tensor(x)
+        if len(x.shape) < 2:
+            x = tf.expand_dims(x, axis=1)
+        ones = tf.ones([tf.shape(x)[0], 1])
+        x = tf.concat([x, ones], axis=1)
+        return cls(x / tf.norm(x, axis=1, keepdims=True), **kwargs)
+
+    @classmethod
+    def load(cls, name):
+        return cls(*np.load('{}.npy'.format(name)))
+
+    def __init__(self, phi, learning_rate_scale=1.0):
+        self.phi = phi
+        self.learning_rate_scale = learning_rate_scale
+
+    def save(self, name):
+        np.save(name,
+                np.array([self.phi, self.learning_rate_scale], dtype=object))
+        return self
 
     def num_examples(self):
         return self.phi.shape[0].value
@@ -19,49 +62,5 @@ class RepresentationWithFixedInputs(object):
     def input_generator(self):
         yield self.phi
 
-
-class RawRepresentationWithFixedInputs(RepresentationWithFixedInputs):
-    def __init__(self, x):
-        super(RawRepresentationWithFixedInputs, self).__init__(
-            lambda x: tf.convert_to_tensor(x), x)
-
-
-class TileCodingRepresentationWithFixedInputs(RepresentationWithFixedInputs):
-    def __init__(self, num_tiling_pairs, x, tile_width_fractions=None):
-        self.num_tiling_pairs = num_tiling_pairs
-        bounds = list(zip(np.min(x, axis=0), np.max(x, axis=0)))
-        _phi_f, _ = tile_coding_dense_feature_expansion(
-            bounds, num_tiling_pairs, tile_width_fractions)
-
-        def phi_f(x):
-            return (tf.stack([_phi_f(state).astype('float32') for state in x])
-                    if len(x) > 0 else tf.convert_to_tensor(
-                        _phi_f(x).astype('float32')))
-
-        super(TileCodingRepresentationWithFixedInputs, self).__init__(phi_f, x)
-
     def learning_rate(self):
-        return float(self.num_examples()) / (2 * self.num_tiling_pairs + 1.0)
-
-
-class TabularRepresentationWithFixedInputs(RepresentationWithFixedInputs):
-    def __init__(self, x):
-        super(TabularRepresentationWithFixedInputs, self).__init__(
-            lambda x: tf.eye(len(x)), x)
-
-    def learning_rate(self):
-        return float(self.num_examples())
-
-
-class LiftAndProjectRepresentationWithFixedInputs(
-        RepresentationWithFixedInputs):
-    def __init__(self, x):
-        def phi_f(x):
-            x = tf.convert_to_tensor(x)
-            if len(x.shape) < 2:
-                x = tf.expand_dims(x, axis=1)
-            norm = tf.norm(x, axis=1, keepdims=True)
-            return tf.concat([x, tf.ones([tf.shape(x)[0], 1])], axis=1) / norm
-
-        super(LiftAndProjectRepresentationWithFixedInputs, self).__init__(
-            phi_f, x)
+        return float(self.num_examples()) * self.learning_rate_scale

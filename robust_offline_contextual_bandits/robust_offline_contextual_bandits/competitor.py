@@ -1,75 +1,40 @@
 from tf_contextual_prediction_with_expert_advice.rrm import \
     RrmPolicyModel
 from robust_offline_contextual_bandits.representations import \
-    TabularRepresentationWithFixedInputs, \
-    RawRepresentationWithFixedInputs, \
-    TileCodingRepresentationWithFixedInputs, \
-    LiftAndProjectRepresentationWithFixedInputs
+    RepresentationWithFixedInputs
 from robust_offline_contextual_bandits.policy import new_ff_policy_model
 from robust_offline_contextual_bandits.optimizers import new_t_inv_gd_optimizer
 
 
 class Competitor(object):
+    @classmethod
+    def from_network_factory(cls,
+                             rep,
+                             network_factory,
+                             optimizer,
+                             policy_model_factory=RrmPolicyModel):
+        policy_model = policy_model_factory(
+            network_factory(rep.num_features()))
+        return cls(rep, policy_model, optimizer)
+
+    @classmethod
+    def tabular(cls, x, num_actions, **kwargs):
+        rep = RepresentationWithFixedInputs.tabular(x)
+        optimizer = new_t_inv_gd_optimizer(rep.learning_rate())
+        return cls.from_network_factory(
+            rep, lambda nf: new_ff_policy_model(num_actions, nf), optimizer,
+            **kwargs)
+
+    @classmethod
+    def tile_coding(cls, x, num_actions, num_tiling_pairs, **kwargs):
+        rep = RepresentationWithFixedInputs.dense_tile_coding(
+            x, num_tiling_pairs, **kwargs)
+        optimizer = new_t_inv_gd_optimizer(rep.learning_rate())
+        return cls.from_network_factory(
+            rep, lambda nf: new_ff_policy_model(num_actions, nf), optimizer,
+            **kwargs)
+
     def __init__(self, rep, policy_model, optimizer):
         self.rep = rep
         self.policy_model = policy_model
         self.optimizer = optimizer
-
-
-class TabularCompetitor(Competitor):
-    @classmethod
-    def new_rep(cls, x):
-        return TabularRepresentationWithFixedInputs(x)
-
-    def __init__(self, x, num_actions, policy_model_factory=RrmPolicyModel):
-        rep = self.__class__.new_rep(x)
-        policy_model = policy_model_factory(
-            new_ff_policy_model(num_actions, rep.num_features()))
-        optimizer = new_t_inv_gd_optimizer(rep.learning_rate())
-        super(TabularCompetitor, self).__init__(rep, policy_model, optimizer)
-
-
-class TileCodingCompetitor(Competitor):
-    @classmethod
-    def new_rep(cls, num_tiling_pairs, x, tile_width_fractions=None):
-        return TileCodingRepresentationWithFixedInputs(
-            num_tiling_pairs, x, tile_width_fractions=tile_width_fractions)
-
-    def __init__(self,
-                 num_tiling_pairs,
-                 x,
-                 num_actions,
-                 policy_model_factory=RrmPolicyModel,
-                 learning_rate_scale=1.0,
-                 tile_width_fractions=None):
-        rep = self.__class__.new_rep(
-            num_tiling_pairs, x, tile_width_fractions=tile_width_fractions)
-        policy_model = policy_model_factory(
-            new_ff_policy_model(num_actions, rep.num_features()))
-        super(TileCodingCompetitor, self).__init__(
-            rep, policy_model,
-            new_t_inv_gd_optimizer(learning_rate_scale * rep.learning_rate()))
-
-
-class NnCompetitor(Competitor):
-    def __init__(self,
-                 network_factory,
-                 x,
-                 optimizer,
-                 policy_model_factory=RrmPolicyModel):
-        rep = self.__class__.new_rep(x)
-        policy_model = policy_model_factory(
-            network_factory(rep.num_features()))
-        super(NnCompetitor, self).__init__(rep, policy_model, optimizer)
-
-
-class RawNnCompetitor(NnCompetitor):
-    @classmethod
-    def new_rep(cls, x):
-        return RawRepresentationWithFixedInputs(x)
-
-
-class LiftAndProjectNnCompetitor(NnCompetitor):
-    @classmethod
-    def new_rep(cls, x):
-        return LiftAndProjectRepresentationWithFixedInputs(x)
