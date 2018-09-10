@@ -10,11 +10,18 @@ from tf_contextual_prediction_with_expert_advice import \
     rm_policy, \
     utility, \
     norm_exp
-from tf_contextual_prediction_with_expert_advice.rrm import rrm_loss
+from tf_contextual_prediction_with_expert_advice.rrm import \
+    rrm_loss, \
+    RrmPolicyModel
 
 from robust_offline_contextual_bandits.policy import \
     sorted_values_across_worlds
 from simple_pytimer import AccumulatingTimer
+
+from robust_offline_contextual_bandits.representations import \
+    RepresentationWithFixedInputs
+
+from robust_offline_contextual_bandits import cache
 
 import matplotlib.pyplot as plt
 
@@ -395,37 +402,6 @@ class KofnTrainingData(object):
         return self.evs_over_time[:, -1]
 
 
-class KofnResults(object):
-    @classmethod
-    def combine(cls, *results):
-        return cls(
-            sum([r.learners for r in results]),
-            KofnTrainingData.combine([r.data for r in results]))
-
-    def __init__(self, learners, data):
-        assert len(learners) == len(data)
-        for i, learners_in_reality in enumerate(self.learners):
-            assert len(learners_in_reality) == len(data[i])
-        self.learners = learners
-        self.data = data
-
-    def lotor(self):
-        '''reality x learner x time'''
-        return np.array([d.losses_over_time for d in self.data])
-
-    def eotor(self):
-        '''reality x learner x time'''
-        return np.array([d.evs_over_time for d in self.data])
-
-    @property
-    def checkpoint_iterations(self):
-        return self.data[0].checkpoint_iterations
-
-    @property
-    def learner_names(self):
-        return [str(learner) for learner in self.learners[0]]
-
-
 class KofnTraining(object):
     def __init__(self,
                  trainer,
@@ -454,6 +430,10 @@ class KofnTraining(object):
     def save_data(self, name):
         self._data.save(name)
         return self
+
+    @property
+    def data(self):
+        return self._data
 
     @property
     def losses_over_time(self):
@@ -620,3 +600,31 @@ class KofnTraining(object):
 
                         self.kofn_timer.mark()
                         print(self.kofn_timer)
+
+
+class KofnTrainingResults(object):
+    @classmethod
+    def from_competitor(cls, competitor, training_data):
+        return cls(competitor.rep, competitor.policy_model, training_data)
+
+    @classmethod
+    def load(cls, name, policy_model=RrmPolicyModel):
+        return cls(
+            RepresentationWithFixedInputs.load('{}.rep'.format(name)),
+            policy_model.load('{}.policy_model'.format(name)),
+            KofnTrainingData.load('{}.training_data'.format(name)))
+
+    def __init__(self, rep, policy_model, training_data):
+        self.rep = rep
+        self.policy_model = policy_model
+        self.training_data = training_data
+
+    def save(self, name):
+        self.rep.save('{}.rep'.format(name))
+        self.policy_model.save('{}.policy_model'.format(name))
+        self.training_data.save('{}.training_data'.format(name))
+        return self
+
+    @cache
+    def policy(self):
+        return self.policy_model(self.rep)
