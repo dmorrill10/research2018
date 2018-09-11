@@ -65,27 +65,38 @@ def new_low_rank_ff_policy_model(num_actions,
                                  num_hidden=1,
                                  hidden_activation=tf.nn.relu,
                                  output_activation=None):
-    layers = []
-    if initial_expansion:
-        layers.append(
-            tf.keras.layers.Dense(
-                num_units,
-                activation=hidden_activation,
-                use_bias=True,
-                input_shape=(None, num_features)))
-        num_hidden -= 1
-    for i in range(num_hidden):
-        layers.append(
-            tf.keras.layers.Dense(
-                rank, use_bias=True, input_shape=(None, num_features)))
-        layers.append(
-            tf.keras.layers.Dense(
-                num_units, activation=hidden_activation, use_bias=True))
+    if rank >= num_units:
+        return new_ff_policy_model(
+            num_actions,
+            num_features,
+            num_units1=num_units,
+            num_units2=num_units,
+            num_hidden=num_hidden,
+            hidden_activation=hidden_activation,
+            output_activation=output_activation
+        )
+    else:
+        layers = []
+        if initial_expansion:
+            layers.append(
+                tf.keras.layers.Dense(
+                    num_units,
+                    activation=hidden_activation,
+                    use_bias=True,
+                    input_shape=(None, num_features)))
+            num_hidden -= 1
+        for i in range(num_hidden):
+            layers.append(
+                tf.keras.layers.Dense(
+                    rank, use_bias=True, input_shape=(None, num_features)))
+            layers.append(
+                tf.keras.layers.Dense(
+                    num_units, activation=hidden_activation, use_bias=True))
 
-    layers.append(
-        tf.keras.layers.Dense(
-            num_actions, use_bias=True, activation=output_activation))
-    return tf.keras.Sequential(layers)
+        layers.append(
+            tf.keras.layers.Dense(
+                num_actions, use_bias=True, activation=output_activation))
+        return tf.keras.Sequential(layers)
 
 
 def uniform_random_or_policy(rows_to_play_random, policy):
