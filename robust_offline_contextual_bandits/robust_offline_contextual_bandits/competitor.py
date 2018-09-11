@@ -26,13 +26,20 @@ class Competitor(object):
             **kwargs)
 
     @classmethod
-    def tile_coding(cls, x, num_actions, num_tiling_pairs, **kwargs):
+    def tile_coding(cls,
+                    x,
+                    num_actions,
+                    num_tiling_pairs,
+                    policy_model_factory=RrmPolicyModel,
+                    **kwargs):
         rep = RepresentationWithFixedInputs.dense_tile_coding(
             x, num_tiling_pairs, **kwargs)
         optimizer = new_t_inv_gd_optimizer(rep.learning_rate())
         return cls.from_network_factory(
-            rep, lambda nf: new_ff_policy_model(num_actions, nf), optimizer,
-            **kwargs)
+            rep,
+            lambda nf: new_ff_policy_model(num_actions, nf),
+            optimizer,
+            policy_model_factory=RrmPolicyModel)
 
     def __init__(self, rep, policy_model, optimizer):
         self.rep = rep
