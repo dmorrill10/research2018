@@ -627,4 +627,4 @@ class KofnTrainingResults(object):
 
     @cache
     def policy(self):
-        return self.policy_model(self.rep)
+        return self.policy_model(self.rep.phi)
