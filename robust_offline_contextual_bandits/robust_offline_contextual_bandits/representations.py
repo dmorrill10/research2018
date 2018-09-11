@@ -19,6 +19,9 @@ class RepresentationWithFixedInputs(object):
         _phi_f, _, lr = tile_coding_dense_feature_expansion(
             bounds, num_tiling_pairs, tile_width_fractions)
 
+        if 'learning_rate_scale' in kwargs:
+            lr *= kwargs.pop('learning_rate_scale')
+
         def phi_f(x):
             return (
                 tf.stack([_phi_f(state).astype('float32') for state in x])
