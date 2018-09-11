@@ -6,7 +6,7 @@ from robust_offline_contextual_bandits.tile_coding import \
 
 class RepresentationWithFixedInputs(object):
     @classmethod
-    def transform(cls, x, phi_f=lambda y: tf.convert_to_tensor(y), **kwargs):
+    def transform(cls, x, phi_f=lambda y: y, **kwargs):
         return cls(phi_f(x), **kwargs)
 
     @classmethod
@@ -45,12 +45,14 @@ class RepresentationWithFixedInputs(object):
         return cls(*np.load('{}.npy'.format(name)))
 
     def __init__(self, phi, learning_rate_scale=1.0):
-        self.phi = phi
+        self.phi = tf.convert_to_tensor(phi)
         self.learning_rate_scale = learning_rate_scale
 
     def save(self, name):
         np.save(name,
-                np.array([self.phi, self.learning_rate_scale], dtype=object))
+                np.array(
+                    [self.phi.numpy(), self.learning_rate_scale],
+                    dtype=object))
         return self
 
     def num_examples(self):
