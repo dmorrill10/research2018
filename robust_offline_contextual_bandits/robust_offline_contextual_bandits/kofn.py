@@ -3,9 +3,11 @@ import numpy as np
 from tensorflow.python.ops.resource_variable_ops import ResourceVariable
 import yaml
 
+from tf_kofn_robust_policy_optimization.robust.contextual_kofn import \
+    ContextualKofnGame
 from tf_kofn_robust_policy_optimization.robust.kofn import \
-    ContextualKofnGame, \
     DeterministicKofnGameTemplate
+
 from tf_contextual_prediction_with_expert_advice import \
     rm_policy, \
     utility, \
