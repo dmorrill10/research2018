@@ -148,3 +148,17 @@ class PlateauFunction(object):
 
         return DataComponentsForTraining(data, noisy_data, combined_raw_data,
                                          sort_indices)
+
+
+class PlateauFunctionDistribution(object):
+    def __init__(self, x_min, x_max, avg_num_plateaus,
+                 avg_num_points_per_plateau):
+        self.x_min = x_min
+        self.x_max = x_max
+        self.avg_num_plateaus = avg_num_plateaus
+        self.avg_num_points_per_plateau = avg_num_points_per_plateau
+
+    def sample(self):
+        return PlateauFunction.sample_from_bounds_and_averages(
+            self.x_min, self.x_max, self.avg_num_plateaus,
+            self.avg_num_points_per_plateau)

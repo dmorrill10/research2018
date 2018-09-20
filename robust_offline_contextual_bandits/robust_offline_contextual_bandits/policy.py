@@ -1,5 +1,6 @@
 import numpy as np
 import tensorflow as tf
+from robust_offline_contextual_bandits.tf_np import logical_or
 
 
 def greedy_policy(rewards):
@@ -73,8 +74,7 @@ def new_low_rank_ff_policy_model(num_actions,
             num_units2=num_units,
             num_hidden=num_hidden,
             hidden_activation=hidden_activation,
-            output_activation=output_activation
-        )
+            output_activation=output_activation)
     else:
         layers = []
         if initial_expansion:
@@ -100,6 +100,16 @@ def new_low_rank_ff_policy_model(num_actions,
 
 
 def uniform_random_or_policy(rows_to_play_random, policy):
-    policy = np.copy(policy)
+    policy = policy.copy()
     policy[rows_to_play_random] = 1.0 / policy.shape[1]
     return policy
+
+
+def max_robust_policy(inputs_known_on_each_action, rewards_on_known_inputs):
+    known_inputs = logical_or(*inputs_known_on_each_action)
+    unknown_inputs = np.logical_not(known_inputs)
+
+    rewards_on_known_inputs = rewards_on_known_inputs.copy()
+    rewards_on_known_inputs[unknown_inputs] = -np.inf
+    return uniform_random_or_policy(unknown_inputs,
+                                    greedy_policy(rewards_on_known_inputs))
