@@ -7,9 +7,7 @@ from robust_offline_contextual_bandits.plotting import tableu20_color_table
 from robust_offline_contextual_bandits.policy import \
     max_robust_policy, \
     greedy_policy
-from robust_offline_contextual_bandits.gp import \
-    train_gp_model, \
-    new_gp_models
+from robust_offline_contextual_bandits.gp import new_gp_models
 from robust_offline_contextual_bandits.plateau_function import PlateauFunction
 
 
@@ -103,13 +101,15 @@ class RealityExperiment(object):
 
 
 class GpRealityExperimentMixin(object):
-    def __init__(self, gp_inducing_input_fraction, *args, **kwargs):
+    def __init__(self, train_gp_model, gp_inducing_input_fraction, *args,
+                 **kwargs):
         super().__init__(*args, **kwargs)
+        self.train_gp_model = train_gp_model
         self.gp_inducing_input_fraction = gp_inducing_input_fraction
 
     def gps(self):
         return [
-            train_gp_model(model)
+            self.train_gp_model(model)
             for model in new_gp_models(
                 [(self.x[x_known], self.reward_functions()[a](self.x[x_known]))
                  for a, x_known in enumerate(self.x_known_on_each_action)],
