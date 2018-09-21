@@ -5,7 +5,7 @@ from tf_contextual_bandit_rrm import rm_policy, utility
 
 class TabularCfr(object):
     @classmethod
-    def from_counts(cls, num_info_sets, num_actions):
+    def zeros(cls, num_info_sets, num_actions):
         return cls(
             ResourceVariable(tf.zeros([num_info_sets, num_actions])),
             ResourceVariable(tf.zeros([num_info_sets, num_actions])))
