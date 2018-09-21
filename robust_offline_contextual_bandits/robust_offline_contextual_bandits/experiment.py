@@ -68,9 +68,6 @@ class RealityExperiment(object):
         )(max_robust_policy)(self.x_known_on_each_action,
                              [r(self.x) for r in self.reward_functions()])
 
-    def num_actions(self):
-        return len(self.plateau_functions)
-
     @cache
     def map_policy(self):
         def compute_map_policy():
@@ -153,9 +150,15 @@ class PlateauRewardRealityExperiment(RealityExperiment):
 
 
 class Experiment(object):
-    def __init__(self, x_train, x_test=None):
+    def __init__(self,
+                 new_reality_experiment,
+                 sample_num_actions,
+                 x_train,
+                 x_test=None):
         if x_test is None: x_test = x_train
 
+        self.new_reality_experiment = new_reality_experiment
+        self.sample_num_actions = sample_num_actions
         tf.train.get_or_create_global_step().assign(0)
         self.x_train = x_train
         self.x_train.setflags(write=False)
@@ -167,6 +170,6 @@ class Experiment(object):
 
     def __getitem__(self, i):
         if i not in self._realities:
-            self._realities[i] = RealityExperiment(i, self.x_train,
-                                                   self.x_test)
+            self._realities[i] = self.new_reality_experiment(
+                i, self.sample_num_actions(), self.x_train, self.x_test)
         return self._realities[i]
