@@ -39,9 +39,10 @@ class TabularCfr(object):
         ev = utility(cur, cfv)
         regrets = cfv - ev
         if rm_plus:
-            self.policy_sum.assign_add(self.t * cur)
-            self.regrets.assign(tf.nn.relu(self.regrets + regrets))
+            update_policy_sum = self.policy_sum.assign_add(self.t * cur)
+            update_regrets = self.regrets.assign(
+                tf.nn.relu(self.regrets + regrets))
         else:
-            self.policy_sum.assign_add(cur)
-            self.regrets.assign_add(regrets)
-        return ev
+            update_policy_sum = self.policy_sum.assign_add(cur)
+            update_regrets = self.regrets.assign_add(regrets)
+        return tf.group(ev, update_policy_sum, update_regrets)
