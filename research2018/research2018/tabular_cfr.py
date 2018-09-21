@@ -11,10 +11,16 @@ class TabularCfr(object):
             ResourceVariable(tf.zeros([num_info_sets, num_actions])))
 
     def __init__(self, regrets, policy_sum):
-        self.regrets = regrets
-        self.policy_sum = policy_sum
-        assert self.regrets.shape == self.policy_sum.shape
+        self.regrets = tf.convert_to_tensor(regrets)
+        self.policy_sum = tf.convert_to_tensor(policy_sum)
+        assert tf.shape(self.regrets) == tf.shape(self.policy_sum)
         self.t = 0
+
+    def num_info_sets(self):
+        return tf.shape(self.regrets)[0]
+
+    def num_actions(self):
+        return tf.shape(self.regrets)[1]
 
     def reset(self):
         for v in [self.regrets, self.policy_sum]:
