@@ -1,7 +1,7 @@
 PIP :=pip
 PYTHON :=python
-NAME :=robust_offline_contextual_bandits
-LIB_NAME :=robust_offline_contextual_bandits
+NAME :=driving_gridworld_experiments
+LIB_NAME :=driving_gridworld_experiments
 
 .PHONY: default
 default: install

@@ -1,7 +1,7 @@
 PIP :=pip
 PYTHON :=python
-NAME :=robust_offline_contextual_bandits
-LIB_NAME :=robust_offline_contextual_bandits
+NAME :=research2018
+LIB_NAME :=research2018
 
 .PHONY: default
 default: install
