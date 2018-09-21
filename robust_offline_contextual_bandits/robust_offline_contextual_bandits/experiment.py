@@ -1,9 +1,7 @@
 import tensorflow as tf
 import numpy as np
-from robust_offline_contextual_bandits.data import load_or_save
+from robust_offline_contextual_bandits.data import load_or_save, load_list
 from robust_offline_contextual_bandits import cache
-from robust_offline_contextual_bandits.plateau_function import \
-    load_all_plateau_functions
 from robust_offline_contextual_bandits.tf_np import reset_random
 from robust_offline_contextual_bandits.plotting import tableu20_color_table
 from robust_offline_contextual_bandits.policy import \
@@ -12,6 +10,16 @@ from robust_offline_contextual_bandits.policy import \
 from robust_offline_contextual_bandits.gp import \
     train_gp_model, \
     new_gp_models
+from robust_offline_contextual_bandits.plateau_function import PlateauFunction
+
+
+@load_list
+def load_all_plateau_functions(reality_idx):
+    return list(
+        zip(*sorted(
+            PlateauFunction.load_all('plateau_function.{}.*'.format(
+                reality_idx)).items(),
+            key=lambda file: int(file.split('.')[-2]))))[1]
 
 
 class RealityExperiment(object):
