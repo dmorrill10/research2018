@@ -82,17 +82,15 @@ class RealityExperiment(object):
             lambda policy: np.save('map_policy.{}.npy'.format(self.id), policy)
         )(compute_map_policy)()
 
-    def sample_rewards(self, x, n):
-        return tf.transpose(
-            tf.stack([
-                action_model(n)
-                for action_model in self.reward_function_distributions(x)
-            ]), [1, 0, 2])
+    def reward_sampler(self, x):
+        rfds = self.reward_function_distributions(x)
 
-    def sample_rewards_with_timer(self, timer):
-        with timer:
-            r = self.sample_rewards()
-        return r
+        def sample_rewards(n):
+            return tf.transpose(
+                tf.stack([action_model(n) for action_model in rfds]),
+                [1, 0, 2])
+
+        return sample_rewards
 
     def reward_function_distributions(self, x):
         raise NotImplementedError('Override')
