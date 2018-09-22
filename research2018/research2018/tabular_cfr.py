@@ -13,7 +13,8 @@ class TabularCfr(object):
     def __init__(self, regrets, policy_sum):
         self.regrets = tf.convert_to_tensor(regrets)
         self.policy_sum = tf.convert_to_tensor(policy_sum)
-        assert tf.shape(self.regrets) == tf.shape(self.policy_sum)
+        assert tf.shape(self.regrets)[0] == tf.shape(self.policy_sum)[0]
+        assert tf.shape(self.regrets)[1] == tf.shape(self.policy_sum)[1]
         self.t = 0
 
     def num_info_sets(self):
