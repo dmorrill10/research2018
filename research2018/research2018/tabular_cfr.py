@@ -1,6 +1,6 @@
 import tensorflow as tf
 from tensorflow.python.ops.resource_variable_ops import ResourceVariable
-from tf_contextual_bandit_rrm import rm_policy, utility
+from tf_contextual_prediction_with_expert_advice import rm_policy, utility
 
 
 class TabularCfr(object):
