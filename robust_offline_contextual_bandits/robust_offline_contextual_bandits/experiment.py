@@ -122,9 +122,14 @@ class GpRealityExperimentMixin(object):
 
 
 class PlateauRewardRealityExperiment(RealityExperiment):
-    def __init__(self, plateau_function_distribution, *args, **kwargs):
+    def __init__(self,
+                 plateau_function_distribution,
+                 stddev=0.0,
+                 *args,
+                 **kwargs):
         super().__init__(*args, **kwargs)
         self.plateau_function_distribution = plateau_function_distribution
+        self.stddev = stddev
 
         for i, f in enumerate(self.plateau_functions):
             self.x_known_on_each_action[i] = f.in_bounds(self.x_train)
@@ -153,10 +158,13 @@ class PlateauRewardRealityExperiment(RealityExperiment):
         )(self._compute_plateau_functions)()
 
     def reward_functions(self):
-        return [
-            lambda x: np.expand_dims(f(x), axis=1)
-            for f in self.plateau_functions
-        ]
+        def new_r(f):
+            def eval_and_expand(x):
+                return np.expand_dims(f(x, stddev=self.stddev), axis=1)
+
+            return eval_and_expand
+
+        return map(new_r, self.plateau_functions)
 
 
 class Experiment(object):
