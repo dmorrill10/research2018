@@ -164,7 +164,7 @@ class Experiment(object):
         self.x_train.setflags(write=False)
 
         self.x_test = x_test
-        self.x.setflags(write=False)
+        self.x_test.setflags(write=False)
 
         self._realities = {}
 
