@@ -91,8 +91,7 @@ class PlateauFunction(object):
             y = outside_plateaus(x)
         if len(x.shape) < 2:
             x = np.expand_dims(x, 1)
-        for i in range(len(self.x_bounds)):
-            x_min, x_max = self.x_bounds[i]
+        for i, (x_min, x_max) in enumerate(self.x_bounds):
             x_in_bounds = np.logical_and(
                 np.all(x_min <= x, axis=-1), np.all(x <= x_max, axis=-1))
             num_bounded_x = x_in_bounds.sum()
@@ -113,8 +112,7 @@ class PlateauFunction(object):
         if len(x.shape) < 2:
             x = np.expand_dims(x, 1)
         in_bounds = np.full([len(x)], False)
-        for i in range(len(self.x_bounds)):
-            x_min, x_max = self.x_bounds[i]
+        for i, (x_min, x_max) in enumerate(self.x_bounds):
             np.logical_or(
                 in_bounds,
                 np.logical_and(
