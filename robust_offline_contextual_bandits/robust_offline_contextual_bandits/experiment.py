@@ -29,7 +29,7 @@ class RealityExperiment(object):
                  x_known_on_each_action=None):
         if x_known_on_each_action is None:
             x_known_on_each_action = [
-                np.full([len(self.x_test)], True) for _ in range(num_actions)
+                np.full([len(x_test)], True) for _ in range(num_actions)
             ]
         self.id = id
         self.num_actions = num_actions
@@ -131,7 +131,7 @@ class PlateauRewardRealityExperiment(RealityExperiment):
         self.x_known_on_each_action = [
             np.concatenate(
                 [x_known, np.full([len(self.x_test)], False)], axis=0)
-            for x_known in x_known_on_each_action
+            for x_known in self.x_known_on_each_action
         ]
 
     def _compute_plateau_functions(self):
