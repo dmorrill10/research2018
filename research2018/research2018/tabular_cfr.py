@@ -7,14 +7,12 @@ class TabularCfr(object):
     @classmethod
     def zeros(cls, num_info_sets, num_actions):
         return cls(
-            ResourceVariable(tf.zeros([num_info_sets, num_actions])),
-            ResourceVariable(tf.zeros([num_info_sets, num_actions])))
+            tf.zeros([num_info_sets, num_actions]),
+            tf.zeros([num_info_sets, num_actions]))
 
     def __init__(self, regrets, policy_sum):
-        self.regrets = tf.convert_to_tensor(regrets)
-        self.policy_sum = tf.convert_to_tensor(policy_sum)
-        assert tf.shape(self.regrets)[0] == tf.shape(self.policy_sum)[0]
-        assert tf.shape(self.regrets)[1] == tf.shape(self.policy_sum)[1]
+        self.regrets = ResourceVariable(regrets)
+        self.policy_sum = ResourceVariable(policy_sum)
         self.t = 0
 
     def num_info_sets(self):
@@ -29,8 +27,7 @@ class TabularCfr(object):
         self.t = 0
 
     def copy(self):
-        return self.__class__(
-            ResourceVariable(self.regrets), ResourceVariable(self.policy_sum))
+        return self.__class__(self.regrets, self.policy_sum)
 
     def cur(self):
         return rm_policy(self.regrets)
