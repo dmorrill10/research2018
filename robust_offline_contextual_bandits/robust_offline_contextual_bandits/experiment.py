@@ -105,6 +105,7 @@ class GpRealityExperimentMixin(object):
         self.train_gp_model = train_gp_model
         self.gp_inducing_input_fraction = gp_inducing_input_fraction
 
+    @cache
     def gps(self):
         return [
             self.train_gp_model(model)
@@ -115,7 +116,7 @@ class GpRealityExperimentMixin(object):
         ]
 
     def gp_at_inputs(self, x):
-        return [gp.at_inputs(x) for gp in self.gps()]
+        return [gp.at_inputs(x) for gp in self.gps]
 
     def reward_function_distributions(self, x):
         return self.gp_at_inputs(x)
