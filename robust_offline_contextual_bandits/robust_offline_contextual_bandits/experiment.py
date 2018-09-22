@@ -86,7 +86,7 @@ class RealityExperiment(object):
         return tf.transpose(
             tf.stack([
                 action_model(n)
-                for action_model in self.reward_function_distributions()
+                for action_model in self.reward_function_distributions(x)
             ]), [1, 0, 2])
 
     def sample_rewards_with_timer(self, timer):
@@ -94,7 +94,7 @@ class RealityExperiment(object):
             r = self.sample_rewards()
         return r
 
-    def reward_function_distributions(self):
+    def reward_function_distributions(self, x):
         raise NotImplementedError('Override')
 
 
