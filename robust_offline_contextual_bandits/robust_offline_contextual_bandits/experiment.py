@@ -29,7 +29,7 @@ class RealityExperiment(object):
                  x_known_on_each_action=None):
         if x_known_on_each_action is None:
             x_known_on_each_action = [
-                np.full([len(x_test)], True) for _ in range(num_actions)
+                np.full([len(x_train)], True) for _ in range(num_actions)
             ]
         self.id = id
         self.num_actions = num_actions
@@ -40,7 +40,8 @@ class RealityExperiment(object):
                 [x_known, np.full([len(self.x_test)], False)], axis=0)
             for x_known in x_known_on_each_action
         ]
-        assert len(self.x_known_on_each_action) == len(self.x)
+        for xk in self.x_known_on_each_action:
+            assert len(xk) == len(self.x)
 
     @cache
     def x(self):
