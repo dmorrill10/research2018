@@ -124,8 +124,8 @@ class GpRealityExperimentMixin(object):
 class PlateauRewardRealityExperiment(RealityExperiment):
     def __init__(self,
                  plateau_function_distribution,
-                 stddev=0.0,
                  *args,
+                 stddev=0.0,
                  **kwargs):
         super().__init__(*args, **kwargs)
         self.plateau_function_distribution = plateau_function_distribution
