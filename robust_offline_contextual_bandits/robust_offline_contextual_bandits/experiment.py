@@ -164,7 +164,7 @@ class PlateauRewardRealityExperiment(RealityExperiment):
 
             return eval_and_expand
 
-        return map(new_r, self.plateau_functions)
+        return list(map(new_r, self.plateau_functions))
 
 
 class Experiment(object):
