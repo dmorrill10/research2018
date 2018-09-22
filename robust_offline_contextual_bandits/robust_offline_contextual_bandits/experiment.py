@@ -125,6 +125,15 @@ class PlateauRewardRealityExperiment(RealityExperiment):
         super().__init__(*args, **kwargs)
         self.plateau_function_distribution = plateau_function_distribution
 
+        for i, f in enumerate(self.plateau_functions):
+            self.x_known_on_each_action[i] = f.in_bounds(self.x_train)
+
+        self.x_known_on_each_action = [
+            np.concatenate(
+                [x_known, np.full([len(self.x_test)], False)], axis=0)
+            for x_known in x_known_on_each_action
+        ]
+
     def _compute_plateau_functions(self):
         self.reset_random()
         return [
@@ -140,7 +149,7 @@ class PlateauRewardRealityExperiment(RealityExperiment):
                 f.save('plateau_function.{}.{}'.format(self.id, a))
                 for a, f in enumerate(functions)
             ]
-        )(self.compute_plateau_functions)()
+        )(self._compute_plateau_functions)()
 
     def reward_functions(self):
         return [
