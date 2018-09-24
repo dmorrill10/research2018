@@ -1,19 +1,28 @@
 import tensorflow as tf
+import numpy as np
 from tensorflow.python.ops.resource_variable_ops import ResourceVariable
 from tf_contextual_prediction_with_expert_advice import rm_policy, utility
 
 
 class TabularCfr(object):
     @classmethod
-    def zeros(cls, num_info_sets, num_actions):
+    def zeros(cls, num_info_sets, num_actions, **kwargs):
         return cls(
             tf.zeros([num_info_sets, num_actions]),
-            tf.zeros([num_info_sets, num_actions]))
+            tf.zeros([num_info_sets, num_actions]), **kwargs)
 
-    def __init__(self, regrets, policy_sum):
+    @classmethod
+    def load(cls, name):
+        return cls(*np.load('{}.npy'.format(name)))
+
+    def __init__(self, regrets, policy_sum, t=0):
         self.regrets = ResourceVariable(regrets)
         self.policy_sum = ResourceVariable(policy_sum)
-        self.t = 0
+        self.t = t
+
+    def save(self, name):
+        np.save(name, [self.regrets, self.policy_sum, self.t])
+        return self
 
     def num_info_sets(self):
         return tf.shape(self.regrets)[0]
