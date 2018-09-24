@@ -4,8 +4,14 @@ import numpy as np
 
 
 def enable_eager():
-    if context._default_mode != context.EAGER_MODE:
-        context._context = None
+    try:
+        if context._default_mode != context.EAGER_MODE:
+            context._context = None
+            try:
+                tf.enable_eager_execution()
+            except:
+                pass
+    except:
         try:
             tf.enable_eager_execution()
         except:
