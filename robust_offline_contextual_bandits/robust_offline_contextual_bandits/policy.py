@@ -106,10 +106,16 @@ def uniform_random_or_policy(rows_to_play_random, policy):
 
 
 def max_robust_policy(inputs_known_on_each_action, rewards_on_known_inputs):
-    known_inputs = logical_or(*inputs_known_on_each_action)
-    unknown_inputs = np.logical_not(known_inputs)
-
     rewards_on_known_inputs = rewards_on_known_inputs.copy()
-    rewards_on_known_inputs[unknown_inputs] = -np.inf
-    return uniform_random_or_policy(unknown_inputs,
-                                    greedy_policy(rewards_on_known_inputs))
+    for a, known_inputs in enumerate(inputs_known_on_each_action):
+        unknown_inputs = np.logical_not(known_inputs)
+        if unknown_inputs.sum() > 0:
+            rewards_on_known_inputs[unknown_inputs, a] = -np.inf
+
+    policy = greedy_policy(rewards_on_known_inputs)
+
+    rows_to_play_random = np.logical_not(
+        logical_or(*inputs_known_on_each_action))
+    if rows_to_play_random.sum() > 0:
+        policy[rows_to_play_random] = 1.0 / policy.shape[1].value
+    return policy
