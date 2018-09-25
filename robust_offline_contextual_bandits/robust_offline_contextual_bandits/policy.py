@@ -112,7 +112,8 @@ def max_robust_policy(inputs_known_on_each_action, rewards_on_known_inputs):
     ], -np.inf)
     for a, known_inputs in enumerate(inputs_known_on_each_action):
         if known_inputs.sum() > 0:
-            all_rewards[known_inputs, a] = rewards_on_known_inputs[a]
+            all_rewards[known_inputs, a] = np.squeeze(
+                rewards_on_known_inputs[a])
 
     policy = greedy_policy(all_rewards)
 
