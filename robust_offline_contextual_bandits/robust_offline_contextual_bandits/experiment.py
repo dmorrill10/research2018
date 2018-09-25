@@ -75,9 +75,7 @@ class RealityExperiment(object):
 
     def max_robust_policy(self, x, x_known_on_each_action):
         return max_robust_policy(x_known_on_each_action,
-                                 tf.concat(
-                                     [r(x) for r in self.reward_functions()],
-                                     axis=1))
+                                 [r(x) for r in self.reward_functions()])
 
     def map_policy(self, x):
         return greedy_policy(self.avg_rewards(x))

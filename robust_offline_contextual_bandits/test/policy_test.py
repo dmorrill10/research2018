@@ -12,7 +12,13 @@ class PolicyTest(tf.test.TestCase):
                 np.array([False, False]),
                 np.array([True, True]),
             ],
-            np.random.normal(size=[2, 4]))
+            [
+                [10.0],
+                [2.0],
+                [],
+                [3.0, 4.0]
+            ]
+        )
         self.assertAllEqual([[1.0, 0, 0, 0], [0.0, 0, 0, 1.0]], patient)
 
 
