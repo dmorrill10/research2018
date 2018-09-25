@@ -135,6 +135,9 @@ class PlateauRewardRealityExperiment(RealityExperiment):
         for i, f in enumerate(self.plateau_functions):
             self.x_train_known_on_each_action[i] = f.in_bounds(self.x_train)
 
+    def in_bounds(self, x):
+        return [f.in_bounds(x) for i, f in enumerate(self.plateau_functions)]
+
     def _compute_plateau_functions(self):
         self.reset_random()
         return [
