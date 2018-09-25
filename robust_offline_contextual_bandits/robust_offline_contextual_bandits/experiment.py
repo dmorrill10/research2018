@@ -26,30 +26,42 @@ class RealityExperiment(object):
                  num_actions,
                  x_train,
                  x_test,
-                 x_known_on_each_action=None):
-        if x_known_on_each_action is None:
-            x_known_on_each_action = [
+                 x_train_known_on_each_action=None):
+        if x_train_known_on_each_action is None:
+            x_train_known_on_each_action = [
                 np.full([len(x_train)], True) for _ in range(num_actions)
             ]
         self.id = id
         self.num_actions = num_actions
         self.x_train = x_train
         self.x_test = x_test
-        self.x_known_on_each_action = [
-            np.concatenate(
-                [x_known, np.full([len(self.x_test)], False)], axis=0)
-            for x_known in x_known_on_each_action
-        ]
-        for xk in self.x_known_on_each_action:
-            assert len(xk) == len(self.x)
+
+        self.x_train_known_on_each_action = x_train_known_on_each_action
+        for xk in self.x_train_known_on_each_action:
+            assert len(xk) == len(self.x_train)
 
     @cache
     def x(self):
         return np.concatenate([self.x_train, self.x_test], axis=0)
 
     @cache
+    def x_test_known_on_each_action(self):
+        return [
+            np.full([len(self.x_test)], False)
+            for _ in range(self.num_actions)
+        ]
+
+    @cache
+    def x_known_on_each_action(self):
+        return [
+            np.concatenate(
+                [x_known, np.full([len(self.x_test)], False)], axis=0)
+            for x_known in self.x_train_known_on_each_action
+        ]
+
+    @cache
     def num_training_examples(self):
-        return self.x_known_on_each_action.sum(axis=0)
+        return self.x_train_known_on_each_action.sum(axis=0)
 
     def reset_random(self):
         reset_random(self.id)
@@ -61,26 +73,14 @@ class RealityExperiment(object):
         color_table = tableu20_color_table()
         return [next(color_table) for _ in range(self.num_actions)]
 
-    @cache
-    def max_robust_policy(self):
-        return load_or_save(
-            lambda: np.load('max_robust_policy.{}.npy'.format(self.id)),
-            lambda policy: np.save('max_robust_policy.{}.npy'.format(self.id), policy)
-        )(max_robust_policy)(self.x_known_on_each_action,
-                             [r(self.x) for r in self.reward_functions()])
+    def max_robust_policy(self, x, x_known_on_each_action):
+        return max_robust_policy(x_known_on_each_action,
+                                 tf.concat(
+                                     [r(x) for r in self.reward_functions()],
+                                     axis=1))
 
-    @cache
-    def map_policy(self):
-        def compute_map_policy():
-            return greedy_policy(
-                np.concatenate(
-                    [model.mean for model in self.gp_at_inputs],
-                    axis=1)).numpy()
-
-        return load_or_save(
-            lambda: np.load('map_policy.{}.npy'.format(self.id)),
-            lambda policy: np.save('map_policy.{}.npy'.format(self.id), policy)
-        )(compute_map_policy)()
+    def map_policy(self, x):
+        return greedy_policy(self.avg_rewards(x))
 
     def reward_sampler(self, x):
         rfds = self.reward_function_distributions(x)
@@ -93,6 +93,9 @@ class RealityExperiment(object):
         return sample_rewards
 
     def reward_function_distributions(self, x):
+        raise NotImplementedError('Override')
+
+    def avg_rewards(self, x):
         raise NotImplementedError('Override')
 
 
@@ -108,16 +111,17 @@ class GpRealityExperimentMixin(object):
         return [
             self.train_gp_model(model)
             for model in new_gp_models(
-                [(self.x[x_known], self.reward_functions()[a](self.x[x_known]))
-                 for a, x_known in enumerate(self.x_known_on_each_action)],
+                [(self.x_train[x_known],
+                  self.reward_functions()[a](self.x_train[x_known])) for a,
+                 x_known in enumerate(self.x_train_known_on_each_action)],
                 gp_inducing_input_fraction=self.gp_inducing_input_fraction)
         ]
 
-    def gp_at_inputs(self, x):
+    def reward_function_distributions(self, x):
         return [gp.at_inputs(x) for gp in self.gps]
 
-    def reward_function_distributions(self, x):
-        return self.gp_at_inputs(x)
+    def avg_rewards(self, x):
+        return tf.concat([gp.at_inputs(x).mean for gp in self.gps], axis=1)
 
 
 class PlateauRewardRealityExperiment(RealityExperiment):
@@ -131,13 +135,7 @@ class PlateauRewardRealityExperiment(RealityExperiment):
         self.stddev = stddev
 
         for i, f in enumerate(self.plateau_functions):
-            self.x_known_on_each_action[i] = f.in_bounds(self.x_train)
-
-        self.x_known_on_each_action = [
-            np.concatenate(
-                [x_known, np.full([len(self.x_test)], False)], axis=0)
-            for x_known in self.x_known_on_each_action
-        ]
+            self.x_train_known_on_each_action[i] = f.in_bounds(self.x_train)
 
     def _compute_plateau_functions(self):
         self.reset_random()
