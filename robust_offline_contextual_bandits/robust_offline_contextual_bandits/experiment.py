@@ -126,21 +126,32 @@ class PlateauRewardRealityExperiment(RealityExperiment):
                  save_to_disk=True,
                  **kwargs):
         super().__init__(*args, **kwargs)
+        self._num_plateau_functions = self.num_actions
         self.plateau_function_distribution = plateau_function_distribution
         self.stddev = stddev
         self.save_to_disk = save_to_disk
 
-        for i, f in enumerate(self.plateau_functions):
-            self.x_train_known_on_each_action[i] = f.in_bounds(self.x_train)
+        self._valid_actions = []
+        self.x_train_known_on_each_action = []
+        for a, f in enumerate(self.plateau_functions):
+            xk = f.in_bounds(self.x_train)
+            if xk.sum() > 0:
+                self._valid_actions.append(a)
+                self.x_train_known_on_each_action.append(xk)
+        self.num_actions = len(self._valid_actions)
+        self._valid_actions = set(self._valid_actions)
 
     def in_bounds(self, x):
-        return [f.in_bounds(x) for i, f in enumerate(self.plateau_functions)]
+        return [
+            f.in_bounds(x) for a, f in enumerate(self.plateau_functions)
+            if a in self._valid_actions
+        ]
 
     def _compute_plateau_functions(self):
         self.reset_random()
         return [
             self.plateau_function_distribution.sample()
-            for _ in range(self.num_actions)
+            for _ in range(self._num_plateau_functions)
         ]
 
     @cache
@@ -167,7 +178,11 @@ class PlateauRewardRealityExperiment(RealityExperiment):
 
             return eval_and_expand
 
-        return list(map(new_r, self.plateau_functions))
+        return list(
+            map(new_r, [
+                f for a, f in enumerate(self.plateau_functions)
+                if a in self._valid_actions
+            ]))
 
 
 class Experiment(object):
