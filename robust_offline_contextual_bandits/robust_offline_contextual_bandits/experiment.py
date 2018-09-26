@@ -7,7 +7,6 @@ from robust_offline_contextual_bandits.plotting import tableu20_color_table
 from robust_offline_contextual_bandits.policy import \
     max_robust_policy, \
     greedy_policy
-from robust_offline_contextual_bandits.gp import new_gp_models
 from robust_offline_contextual_bandits.plateau_function import PlateauFunction
 
 
@@ -98,28 +97,25 @@ class RealityExperiment(object):
 
 
 class GpRealityExperimentMixin(object):
-    def __init__(self, train_gp_model, gp_inducing_input_fraction, *args,
-                 **kwargs):
+    def __init__(self, new_gp_model, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.train_gp_model = train_gp_model
-        self.gp_inducing_input_fraction = gp_inducing_input_fraction
+        self.new_gp_model = new_gp_model
 
     @cache
     def gps(self):
         return [
-            self.train_gp_model(model)
-            for model in new_gp_models(
-                [(self.x_train[x_known],
-                  self.reward_functions()[a](self.x_train[x_known])) for a,
-                 x_known in enumerate(self.x_train_known_on_each_action)],
-                gp_inducing_input_fraction=self.gp_inducing_input_fraction)
+            self.new_gp_model(self.x_train[x_known],
+                              self.reward_functions()[a](
+                                  self.x_train[x_known])).train()
+            for a, x_known in enumerate(self.x_train_known_on_each_action)
         ]
 
     def reward_function_distributions(self, x):
         return [gp.at_inputs(x) for gp in self.gps]
 
     def avg_rewards(self, x):
-        return tf.concat([gp.at_inputs(x).mean for gp in self.gps], axis=1)
+        return np.concatenate(
+            [gp.at_inputs(x).mean for gp in self.gps], axis=1)
 
 
 class PlateauRewardRealityExperiment(RealityExperiment):
@@ -127,10 +123,12 @@ class PlateauRewardRealityExperiment(RealityExperiment):
                  plateau_function_distribution,
                  *args,
                  stddev=0.0,
+                 save_to_disk=True,
                  **kwargs):
         super().__init__(*args, **kwargs)
         self.plateau_function_distribution = plateau_function_distribution
         self.stddev = stddev
+        self.save_to_disk = save_to_disk
 
         for i, f in enumerate(self.plateau_functions):
             self.x_train_known_on_each_action[i] = f.in_bounds(self.x_train)
@@ -147,13 +145,20 @@ class PlateauRewardRealityExperiment(RealityExperiment):
 
     @cache
     def plateau_functions(self):
-        return load_or_save(
-            lambda: load_all_plateau_functions(self.id),
-            lambda functions: [
-                f.save('plateau_function.{}.{}'.format(self.id, a))
-                for a, f in enumerate(functions)
-            ]
-        )(self._compute_plateau_functions)()
+        if self.save_to_disk:
+
+            def save(functions):
+                return [
+                    f.save('plateau_function.{}.{}'.format(self.id, a))
+                    for a, f in enumerate(functions)
+                ]
+        else:
+
+            def save(functions):
+                return None
+
+        return load_or_save(lambda: load_all_plateau_functions(self.id),
+                            save)(self._compute_plateau_functions)()
 
     def reward_functions(self):
         def new_r(f):

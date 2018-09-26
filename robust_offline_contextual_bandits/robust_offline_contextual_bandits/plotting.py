@@ -2,6 +2,10 @@ from copy import deepcopy
 from itertools import cycle
 import numpy as np
 import matplotlib as mpl
+
+if mpl.rcParams['backend'] == 'MacOSX':
+    mpl.rcParams['backend'] = 'Agg'
+
 import matplotlib.pyplot as plt
 try:
     from google.colab import files

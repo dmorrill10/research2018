@@ -123,5 +123,5 @@ def max_robust_policy(inputs_known_on_each_action, rewards_on_known_inputs):
     rows_to_play_random = np.logical_not(
         logical_or(*inputs_known_on_each_action))
     if rows_to_play_random.sum() > 0:
-        policy[rows_to_play_random] = 1.0 / policy.shape[1].value
+        policy[rows_to_play_random] = 1.0 / policy.shape[1]
     return policy
