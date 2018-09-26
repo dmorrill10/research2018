@@ -109,41 +109,42 @@ class Gp(object):
                       y,
                       inducing_fraction=1.0,
                       use_random_inducing=True,
-                      kernel=None):
+                      kernel=None,
+                      heteroscedastic=False):
         num_examples, num_features = phi.shape
-        num_outputs = phi.shape[1]
-        bias = y.mean()
-        mean_function = gp_lib.mappings.Constant(num_features, num_outputs,
-                                                 bias)
 
         if kernel is None:
             kernel = (gp_lib.kern.Matern32(num_features) +
-                      gp_lib.kern.White(num_features))
+                      gp_lib.kern.White(num_features) +
+                      gp_lib.kern.Bias(num_features))
 
         num_inducing = int(np.ceil(num_examples * inducing_fraction))
 
+        kwargs = {}
+
+        if not heteroscedastic:
+            num_outputs = y.shape[1]
+            bias = y.mean()
+            mean_function = gp_lib.mappings.Constant(num_features, num_outputs,
+                                                     bias)
+            kwargs['mean_function'] = mean_function
+
         if num_inducing == num_examples:
-            gp = gp_lib.models.GPRegression(
-                phi, y, kernel, mean_function=mean_function)
+            if heteroscedastic:
+                new_gp = gp_lib.models.GPHeteroscedasticRegression
+            else:
+                new_gp = gp_lib.models.GPRegression
         else:
-            gp = (
-                gp_lib.models.SparseGPRegression(
-                    phi,
-                    y,
-                    kernel,
-                    Z=phi[np.random.choice(
-                        num_examples, num_inducing, replace=False)],
-                    mean_function=mean_function
-                ) if use_random_inducing
-                else gp_lib.models.SparseGPRegression(
-                    phi,
-                    y,
-                    kernel,
-                    num_inducing=num_inducing,
-                    mean_function=mean_function
-                )
-            )  # yapf:disable
-        return cls(gp)
+            if use_random_inducing:
+                kwargs['Z'] = phi[np.random.choice(
+                    num_examples, num_inducing, replace=False)]
+            else:
+                kwargs['num_inducing'] = num_inducing
+            if heteroscedastic:
+                new_gp = gp_lib.models.SparseGPHeteroscedasticRegression
+            else:
+                new_gp = gp_lib.models.SparseGPRegression
+        return cls(new_gp(phi, y, kernel, **kwargs))
 
     def __init__(self, gp):
         self.gp = gp
