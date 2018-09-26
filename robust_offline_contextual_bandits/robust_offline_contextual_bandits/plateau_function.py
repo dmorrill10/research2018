@@ -36,34 +36,6 @@ def _bounds(x):
 
 class PlateauFunction(object):
     @classmethod
-    def sample_from_bounds_and_averages(cls, x_min, x_max, avg_num_plateaus,
-                                        avg_num_points_per_plateau):
-        stddev = np.abs(x_max - x_min)
-        cluster_stddev = stddev / 20.0
-        num_plateaus = int(
-            np.ceil(np.abs(np.random.normal(avg_num_plateaus, stddev))))
-        heights = np.random.normal(0.0, size=[num_plateaus])
-        midpoints = np.random.uniform(x_min, x_max, size=[num_plateaus])
-        num_points_per_plateau = max(
-            2,
-            int(
-                np.ceil(
-                    np.abs(
-                        np.random.normal(avg_num_points_per_plateau,
-                                         stddev)))))
-        return cls.sample(midpoints, heights, num_points_per_plateau,
-                          cluster_stddev)
-
-    @classmethod
-    def sample(cls, centers, heights, num_points_per_plateau, cluster_stddev):
-        x_clusters = [
-            m +
-            np.random.normal(0, cluster_stddev, size=[num_points_per_plateau])
-            for m in centers
-        ]
-        return cls(heights, x_clusters)
-
-    @classmethod
     def load(cls, name):
         return cls(*np.load('{}.npy'.format(name)))
 
@@ -74,14 +46,17 @@ class PlateauFunction(object):
             for file in glob(pattern)
         }
 
-    def __init__(self, heights, x_clusters):
+    def __init__(self, heights, bounds):
         self.heights = heights
-        self.x_clusters = x_clusters
-        self.x_bounds = [_bounds(x) for x in self.x_clusters]
+        self.bounds = bounds
+
+    @property
+    def centers(self):
+        return [sum(b) / 2.0 for b in self.bounds]
 
     def save(self, name):
         np.save('{}.npy'.format(name),
-                np.array([self.heights, self.x_clusters], dtype=object))
+                np.array([self.heights, self.bounds], dtype=object))
         return self
 
     def __call__(self, x, outside_plateaus=None, stddev=0.0):
@@ -91,7 +66,7 @@ class PlateauFunction(object):
             y = outside_plateaus(x)
         if len(x.shape) < 2:
             x = np.expand_dims(x, 1)
-        for i, (x_min, x_max) in enumerate(self.x_bounds):
+        for i, (x_min, x_max) in enumerate(self.bounds):
             x_in_bounds = np.logical_and(
                 np.all(x_min <= x, axis=-1), np.all(x <= x_max, axis=-1))
             num_bounded_x = x_in_bounds.sum()
@@ -112,7 +87,7 @@ class PlateauFunction(object):
         if len(x.shape) < 2:
             x = np.expand_dims(x, 1)
         in_bounds = np.full([len(x)], False)
-        for i, (x_min, x_max) in enumerate(self.x_bounds):
+        for i, (x_min, x_max) in enumerate(self.bounds):
             np.logical_or(
                 in_bounds,
                 np.logical_and(
@@ -149,14 +124,22 @@ class PlateauFunction(object):
 
 
 class PlateauFunctionDistribution(object):
-    def __init__(self, x_min, x_max, avg_num_plateaus,
-                 avg_num_points_per_plateau):
-        self.x_min = x_min
-        self.x_max = x_max
-        self.avg_num_plateaus = avg_num_plateaus
-        self.avg_num_points_per_plateau = avg_num_points_per_plateau
-
     def sample(self):
-        return PlateauFunction.sample_from_bounds_and_averages(
-            self.x_min, self.x_max, self.avg_num_plateaus,
-            self.avg_num_points_per_plateau)
+        num_plateaus = int(np.ceil(self.sample_num_plateaus()))
+        heights = [self.sample_height() for _ in range(num_plateaus)]
+        centers = [self.sample_center() for _ in range(num_plateaus)]
+        radii = [self.sample_radius() for _ in range(num_plateaus)]
+        bounds = [(c - radii[i], c + radii[i]) for i, c in enumerate(centers)]
+        return PlateauFunction(heights, bounds)
+
+    def sample_num_plateaus(self):
+        raise NotImplementedError('Override')
+
+    def sample_height(self):
+        raise NotImplementedError('Override')
+
+    def sample_center(self):
+        raise NotImplementedError('Override')
+
+    def sample_radius(self):
+        raise NotImplementedError('Override')
