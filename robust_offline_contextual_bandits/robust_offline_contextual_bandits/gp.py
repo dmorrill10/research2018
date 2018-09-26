@@ -110,8 +110,15 @@ class Gp(object):
                       inducing_fraction=1.0,
                       use_random_inducing=True,
                       kernel=None,
-                      heteroscedastic=False):
-        num_examples, num_features = phi.shape
+                      heteroscedastic=False,
+                      num_features=None):
+        num_examples = phi.shape[0]
+        if num_features is None:
+            num_features = phi.shape[1]
+
+        assert num_features > 0
+        if num_examples > 0:
+            assert num_features == phi.shape[1]
 
         if kernel is None:
             kernel = (gp_lib.kern.Matern32(num_features) +
@@ -122,7 +129,7 @@ class Gp(object):
 
         kwargs = {}
 
-        if not heteroscedastic:
+        if num_examples > 0 and not heteroscedastic:
             num_outputs = y.shape[1]
             bias = y.mean()
             mean_function = gp_lib.mappings.Constant(num_features, num_outputs,
