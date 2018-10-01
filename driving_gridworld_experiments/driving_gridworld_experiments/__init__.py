@@ -202,7 +202,7 @@ def rollout(policy, game, num_steps=100):
             fig=fig,
             ax=ax)
         frames.append([frame] + ax_texts)
-        return frames, fig, ax, actions, np.array(rewards), np.array(discounts)
+    return frames, fig, ax, actions, np.array(rewards), np.array(discounts)
 
 
 if __name__ == '__main__':
