@@ -58,4 +58,4 @@ class TabularCfr(object):
         else:
             update_policy_sum = self.policy_sum.assign_add(cur)
             update_regrets = self.regrets.assign_add(regrets)
-        return tf.group(ev, update_policy_sum, update_regrets)
+        return ev, update_policy_sum, update_regrets
