@@ -234,7 +234,6 @@ def plot_percentile_performance(methods, baseline=None):
     if len(methods) > 1:
         handles, labels = inv_cdf_plot.get_legend_handles_labels()
         fig.legend(handles, labels, loc='upper center')
-    plt.margins(0, 0)
     return axes
 
 
