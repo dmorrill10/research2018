@@ -44,7 +44,7 @@ class TabularCfr(object):
     def avg(self):
         return rm_policy(self.policy_sum)
 
-    def update(self, env, mix_avg=0.0, rm_plus=False):
+    def update(self, env, mix_avg=0.0, rm_plus=False, uniformly_avg=False):
         self.t += 1
         cur = self.cur()
         avg = self.avg()
@@ -52,7 +52,8 @@ class TabularCfr(object):
         ev = utility(cur, cfv)
         regrets = cfv - ev
         if rm_plus:
-            update_policy_sum = self.policy_sum.assign_add(self.t * cur)
+            update_policy_sum = self.policy_sum.assign_add(
+                cur if uniformly_avg else self.t * cur)
             update_regrets = self.regrets.assign(
                 tf.nn.relu(self.regrets + regrets))
         else:
