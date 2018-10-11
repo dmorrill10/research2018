@@ -2,6 +2,7 @@ from copy import deepcopy
 from itertools import cycle
 import numpy as np
 import matplotlib as mpl
+from matplotlib import rc
 
 if mpl.rcParams['backend'] == 'MacOSX':
     mpl.rcParams['backend'] = 'Agg'
@@ -87,9 +88,8 @@ def download_figure(file_name):
 
 def set_good_defaults(figure_style="seaborn-whitegrid"):
     plt.style.use(figure_style)
-    mpl.rcParams['legend.fancybox'] = True
-    mpl.rcParams['legend.framealpha'] = 0.8
-    mpl.rcParams['legend.frameon'] = True
+    rc('legend', fancybox=True, framealpha=0.8, frameon=True)
+    rc('animation', html='jshtml')
 
 
 def plot_sampled_functions(data,
