@@ -67,14 +67,8 @@ class TabularCfr(object):
             pol = pol + mix_avg * avg
         return pol
 
-    def __call__(self, env, mix_avg=0.0):
-        return env(self.policy(mix_avg))
-
-    def ev(self, env, context_weights=None, mix_avg=0.0):
-        policy = self.policy(mix_avg)
-        cfv = env(policy)
-
-        context_values = utility(policy, cfv)
+    def ev(self, context_value_env, context_weights=None, mix_avg=0.0):
+        context_values = context_value_env(self.policy(mix_avg))
         if context_weights is not None:
             context_weights = tf.convert_to_tensor(context_weights)
             if len(context_weights.shape) < len(context_values.shape):
