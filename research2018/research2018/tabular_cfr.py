@@ -109,5 +109,5 @@ class TabularCfr(object):
             update_regrets = self.regrets.assign_add(regrets)
 
         update_policy_sum = self.policy_sum.assign_add(
-            for_avg(cur, self.t + 1))
+            for_avg(cur, tf.cast(self.t + 1, tf.float32)))
         return evs, tf.group(update_policy_sum, update_regrets, update_t)
