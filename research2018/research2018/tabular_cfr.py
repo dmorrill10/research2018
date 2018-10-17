@@ -4,6 +4,18 @@ from tensorflow.python.ops.resource_variable_ops import ResourceVariable
 from tf_contextual_prediction_with_expert_advice import rm_policy, utility
 
 
+def linear_avg_next_policy_sum(policy_sum, _cur, t):
+    return policy_sum + t * _cur
+
+
+def uniform_avg_next_policy_sum(policy_sum, _cur, t):
+    return policy_sum + _cur
+
+
+def exp_avg_next_policy_sum(policy_sum, _cur, t, alpha=0.9):
+    return alpha * policy_sum + (1.0 - alpha) * _cur
+
+
 class TabularCfr(object):
     @classmethod
     def zeros(cls, num_info_sets, num_actions, **kwargs):
@@ -77,7 +89,7 @@ class TabularCfr(object):
         else:
             return tf.reduce_mean(context_values)
 
-    def update(self, env, mix_avg=0.0, rm_plus=False, for_avg=None):
+    def update(self, env, mix_avg=0.0, rm_plus=False, next_policy_sum=None):
         cur = self.cur()
         policy = (1.0 - mix_avg) * cur
 
@@ -93,21 +105,16 @@ class TabularCfr(object):
 
         update_t = self.t.assign_add(1)
         if rm_plus:
-            if for_avg is None:
-
-                def for_avg(_cur, t):
-                    return t * _cur  # Linear avg
-
+            if next_policy_sum is None:
+                next_policy_sum = linear_avg_next_policy_sum
             update_regrets = self.regrets.assign(
                 tf.nn.relu(self.regrets + regrets))
         else:
-            if for_avg is None:
-
-                def for_avg(_cur, t):
-                    return _cur  # Uniform avg
-
+            if next_policy_sum is None:
+                next_policy_sum = uniform_avg_next_policy_sum
             update_regrets = self.regrets.assign_add(regrets)
 
-        update_policy_sum = self.policy_sum.assign_add(
-            for_avg(cur, tf.cast(self.t + 1, tf.float32)))
+        update_policy_sum = self.policy_sum.assign(
+            next_policy_sum(self.policy_sum, cur,
+                            tf.cast(self.t + 1, tf.float32)))
         return evs, tf.group(update_policy_sum, update_regrets, update_t)
