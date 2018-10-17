@@ -18,14 +18,14 @@ class TabularCfr(object):
     def __init__(self, regrets, policy_sum, t=0):
         self.regrets = ResourceVariable(regrets)
         self.policy_sum = ResourceVariable(policy_sum)
-        self.t = t
-        self._last_t_cur = t - 1
-        self._last_t_avg = t - 1
-        self._cur = None
-        self._avg = None
+        self.t = ResourceVariable(t)
 
     def save(self, name):
         np.save(name, [self.regrets, self.policy_sum, self.t])
+        return self
+
+    def graph_save(self, name, sess):
+        np.save(name, sess.run([self.regrets, self.policy_sum, self.t]))
         return self
 
     def num_info_sets(self):
@@ -37,22 +37,16 @@ class TabularCfr(object):
     def reset(self):
         for v in [self.regrets, self.policy_sum]:
             v.assign(tf.zeros_like(v))
-        self.t = 0
+        self.t.assign(0)
 
     def copy(self):
         return self.__class__(self.regrets, self.policy_sum)
 
     def cur(self):
-        if self.t > self._last_t_cur:
-            self._last_t_cur = self.t
-            self._cur = rm_policy(self.regrets)
-        return self._cur
+        return rm_policy(self.regrets)
 
     def avg(self):
-        if self.t > self._last_t_avg:
-            self._last_t_avg = self.t
-            self._avg = rm_policy(self.policy_sum)
-        return self._avg
+        return rm_policy(self.policy_sum)
 
     def policy(self, mix_avg=0.0):
         use_cur = mix_avg < 1
@@ -97,7 +91,7 @@ class TabularCfr(object):
         evs = utility(cur, cfv)
         regrets = cfv - evs
 
-        self.t += 1
+        update_t = self.t.assign_add(1)
         if rm_plus:
             if for_avg is None:
 
@@ -114,5 +108,6 @@ class TabularCfr(object):
 
             update_regrets = self.regrets.assign_add(regrets)
 
-        update_policy_sum = self.policy_sum.assign_add(for_avg(cur, self.t))
-        return evs, update_policy_sum, update_regrets
+        update_policy_sum = self.policy_sum.assign_add(
+            for_avg(cur, self.t + 1))
+        return evs, tf.group(update_policy_sum, update_regrets, update_t)
