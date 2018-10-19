@@ -4,10 +4,9 @@ from robust_offline_contextual_bandits.data import load_or_save, load_list
 from robust_offline_contextual_bandits import cache
 from robust_offline_contextual_bandits.tf_np import reset_random
 from robust_offline_contextual_bandits.plotting import tableu20_color_table
-from robust_offline_contextual_bandits.policy import \
-    max_robust_policy, \
-    greedy_policy
+from robust_offline_contextual_bandits.policy import max_robust_policy
 from robust_offline_contextual_bandits.plateau_function import PlateauFunction
+from tf_contextual_prediction_with_expert_advice import greedy_policy
 
 
 @load_list
@@ -77,7 +76,7 @@ class RealityExperiment(object):
                                  [r(x) for r in self.reward_functions()])
 
     def map_policy(self, x):
-        return greedy_policy(self.avg_rewards(x))
+        return greedy_policy(self.avg_rewards(x).astype('float32'))
 
     def reward_sampler(self, x):
         rfds = self.reward_function_distributions(x)

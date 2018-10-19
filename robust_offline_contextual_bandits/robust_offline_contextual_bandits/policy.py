@@ -1,20 +1,7 @@
 import numpy as np
 import tensorflow as tf
+from tf_contextual_prediction_with_expert_advice import greedy_policy
 from robust_offline_contextual_bandits.tf_np import logical_or
-
-
-def greedy_policy(rewards):
-    num_states = rewards.shape[0]
-    policy = np.zeros([num_states]).astype('int32')
-    value = rewards[:, 0]
-    for a in range(1, rewards.shape[1]):
-        y = rewards[:, a]
-        a_better = y > value
-        policy[a_better] = a
-        value[a_better] = y[a_better]
-    gp = np.zeros(rewards.shape)
-    gp[np.arange(num_states), policy] = 1
-    return gp
 
 
 def sorted_values_across_worlds(policy, sampled_rewards):
@@ -118,10 +105,14 @@ def max_robust_policy(inputs_known_on_each_action, rewards_on_known_inputs):
             all_rewards[known_inputs, a] = np.squeeze(
                 rewards_on_known_inputs[a])
 
-    policy = greedy_policy(all_rewards)
+    policy = greedy_policy(all_rewards.astype('float32'))
 
     rows_to_play_random = np.logical_not(
         logical_or(*inputs_known_on_each_action))
     if rows_to_play_random.sum() > 0:
-        policy[rows_to_play_random] = 1.0 / policy.shape[1]
+        return tf.where(
+            tf.tile(
+                tf.expand_dims(rows_to_play_random, axis=-1),
+                [1, policy.shape[1].value]),
+            tf.fill(policy.shape, 1.0 / policy.shape[1].value), policy)
     return policy
