@@ -124,7 +124,7 @@ class FixedParameterCfr(object):
     @classmethod
     def load(cls, name, *args, cfr_cls=TabularCfr, **kwargs):
         return cls(
-            cfr_cls.load('{}.cfr.npy'.format(name)), *args,
+            cfr_cls.load('{}.cfr'.format(name)), *args,
             *np.load('{}.params.npy'.format(name)), **kwargs)
 
     def __init__(self, cfr, use_plus, mix_avg):
