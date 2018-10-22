@@ -122,12 +122,11 @@ class TabularCfr(object):
 
 class FixedParameterCfr(object):
     @classmethod
-    def load(cls, name, *args, cfr_cls=TabularCfr, **kwargs):
-        return cls(
-            cfr_cls.load('{}.cfr'.format(name)), *args,
-            *np.load('{}.params.npy'.format(name)), **kwargs)
+    def load(cls, name, cfr_cls=TabularCfr):
+        return cls(*np.load('{}.params.npy'.format(name)),
+                   cfr_cls.load('{}.cfr'.format(name)))
 
-    def __init__(self, cfr, use_plus, mix_avg):
+    def __init__(self, use_plus, mix_avg, cfr):
         self.cfr = cfr
         self.use_plus = use_plus
         self.mix_avg = mix_avg
