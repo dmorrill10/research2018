@@ -183,10 +183,6 @@ class UncertainRewardDiscountedContinuingKofnLearner(object):
         self.test_env = new_test_env(cfr.opponent)
 
     @property
-    def cfr_update(self):
-        return self.cfr.update
-
-    @property
     def env_update(self):
         return self.train_env.update
 
@@ -197,6 +193,9 @@ class UncertainRewardDiscountedContinuingKofnLearner(object):
     @property
     def test_env_update(self):
         return self.test_env.update
+
+    def cfr_update(self, *args, **kwargs):
+        return self.cfr.update(self.train_env, *args, **kwargs)
 
     def test_ev(self):
         return tf.squeeze(self.test_env(self.policy()))
