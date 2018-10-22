@@ -140,7 +140,7 @@ class KofnCfr(FixedParameterAvgCodeCfr):
 
     def graph_save(self, name, sess):
         np.save('{}.params'.format(name), self.params(sess))
-        self.cfr.graph_save('{}.tabular_cfr'.format(name), sess)
+        self.cfr.graph_save('{}.cfr'.format(name), sess)
         return self
 
 
