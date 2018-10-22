@@ -104,8 +104,13 @@ class FixedRewardEnvFactory(object):
                    avg_threshold=0.1,
                    max_num_iterations=1000):
         return UncertainRewardDiscountedContinuingKofnGame.environment(
-            kofn_opponent, self.root_probs, self.transitions,
-            self.sample_reward_function, **self.kwargs)
+            kofn_opponent,
+            self.root_probs,
+            self.transitions,
+            self.sample_reward_function,
+            threshold=avg_threshold * self.num_state_actions(),
+            max_num_iterations=max_num_iterations,
+            **self.kwargs)
 
     def state_env(self,
                   kofn_opponent,
@@ -116,7 +121,7 @@ class FixedRewardEnvFactory(object):
             self.root_probs,
             self.transitions,
             self.sample_reward_function,
-            threshold=avg_threshold * self.num_state_actions(),
+            threshold=avg_threshold * self.num_states(),
             max_num_iterations=max_num_iterations,
             **self.kwargs)
 
