@@ -18,10 +18,10 @@ def exp_avg_next_policy_sum(policy_sum, _cur, t, alpha=0.9):
 
 class TabularCfr(object):
     @classmethod
-    def zeros(cls, num_info_sets, num_actions, **kwargs):
+    def zeros(cls, num_info_sets, num_actions, *args, **kwargs):
         return cls(
             tf.zeros([num_info_sets, num_actions]),
-            tf.zeros([num_info_sets, num_actions]), **kwargs)
+            tf.zeros([num_info_sets, num_actions]), *args, **kwargs)
 
     @classmethod
     def load(cls, name):
@@ -60,7 +60,7 @@ class TabularCfr(object):
     def avg(self):
         return rm_policy(self.policy_sum)
 
-    def policy(self, mix_avg=0.0):
+    def policy(self, mix_avg=1.0):
         use_cur = mix_avg < 1
         pol = 0.0
         if use_cur:
@@ -70,7 +70,7 @@ class TabularCfr(object):
         use_avg = mix_avg > 0
         if use_avg:
             avg = self.avg()
-            pol = pol + mix_avg * avg
+            pol = mix_avg * avg + pol
         return pol
 
     def ev(self, context_value_env, context_weights=None, mix_avg=0.0):
@@ -118,3 +118,64 @@ class TabularCfr(object):
             next_policy_sum(self.policy_sum, cur,
                             tf.cast(self.t + 1, tf.float32)))
         return evs, tf.group(update_policy_sum, update_regrets, update_t)
+
+
+class FixedParameterCfr(object):
+    @classmethod
+    def load(cls, name, cfr_cls=TabularCfr):
+        return cls(
+            cfr_cls.load('{}.cfr.npy'.format(name)),
+            *np.load('{}.params.npy'.format(name)))
+
+    def __init__(self, cfr, use_plus, mix_avg):
+        self.cfr = cfr
+        self.use_plus = use_plus
+        self.mix_avg = mix_avg
+
+    def params(self):
+        return [self.use_plus, self.mix_avg]
+
+    def save(self, name):
+        np.save('{}.params'.format(name), self.params())
+        self.cfr.save('{}.cfr'.format(name))
+        return self
+
+    def graph_save(self, name, sess):
+        np.save('{}.params'.format(name), self.params())
+        self.cfr.graph_save('{}.tabular_cfr'.format(name), sess)
+        return self
+
+    def next_policy_sum(self):
+        raise NotImplementedError('Please override')
+
+    def update(self, env):
+        return self.cfr.update(
+            env,
+            rm_plus=self.use_plus,
+            mix_avg=self.mix_avg,
+            next_policy_sum=self.next_policy_sum())
+
+
+class FixedParameterAvgCodeCfr(FixedParameterCfr):
+    USE_UNIFORM_AVG = -2
+    USE_LINEAR_AVG = -1
+
+    def __init__(self, next_policy_sum_code, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.next_policy_sum_code = next_policy_sum_code
+
+    def params(self):
+        return [self.next_policy_sum_code] + super().params()
+
+    def next_policy_sum(self):
+        if self.next_policy_sum_code == self.USE_UNIFORM_AVG:
+            return uniform_avg_next_policy_sum
+        elif self.next_policy_sum_code == self.USE_LINEAR_AVG:
+            return linear_avg_next_policy_sum
+        else:
+
+            def f(*args):
+                return exp_avg_next_policy_sum(
+                    *args, alpha=self.next_policy_sum_code)
+
+            return f
