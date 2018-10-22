@@ -6,6 +6,10 @@ from driving_gridworld.rewards import TfUniformSituationalReward
 from tf_kofn_robust_policy_optimization.discounted_mdp import \
     state_successor_policy_evaluation_op, \
     state_distribution
+from tf_kofn_robust_policy_optimization.robust.uncertain_reward_discounted_continuing_kofn import \
+    UncertainRewardDiscountedContinuingKofnGame, \
+    UncertainRewardDiscountedContinuingKofnEvEnv
+from research2018.tabular_cfr import FixedParameterAvgCodeCfr, TabularCfr
 
 
 def new_road(headlight_range=3,
@@ -74,3 +78,120 @@ def new_transitions_rewards_and_indices_on_cpu(*args, **kwargs):
     with tf.device('/cpu:0'):
         ret = new_transitions_rewards_and_indices(*args, **kwargs)
     return ret
+
+
+class FixedRewardEnvFactory(object):
+    def __init__(self, root_probs, transitions, rewards, **kwargs):
+        self.root_probs = root_probs
+        self.transitions = tf.convert_to_tensor(transitions)
+        self.rewards = rewards
+        self.kwargs = kwargs
+
+    def num_states(self):
+        return self.transitions.shape[0].value
+
+    def num_actions(self):
+        return self.transitions.shape[1].value
+
+    def num_state_actions(self):
+        return self.num_states() * self.num_actions()
+
+    def sample_reward_function(self):
+        return self.rewards
+
+    def action_env(self,
+                   kofn_opponent,
+                   avg_threshold=0.1,
+                   max_num_iterations=1000):
+        return UncertainRewardDiscountedContinuingKofnGame.environment(
+            kofn_opponent, self.root_probs, self.transitions,
+            self.sample_reward_function, **self.kwargs)
+
+    def state_env(self,
+                  kofn_opponent,
+                  avg_threshold=0.1,
+                  max_num_iterations=1000):
+        return UncertainRewardDiscountedContinuingKofnEvEnv(
+            kofn_opponent,
+            self.root_probs,
+            self.transitions,
+            self.sample_reward_function,
+            threshold=avg_threshold * self.num_state_actions(),
+            max_num_iterations=max_num_iterations,
+            **self.kwargs)
+
+
+class KofnCfr(FixedParameterAvgCodeCfr):
+    def __init__(self, opponent, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.opponent = opponent
+
+    def params(self, sess=None):
+        if sess is None:
+            return [self.opponent] + super().params()
+        else:
+            return [sess.run(self.opponent)] + super().params()
+
+
+class UncertainRewardDiscountedContinuingKofnTabularCfr(KofnCfr):
+    @classmethod
+    def from_num_states_and_actions(cls, num_states, num_actions, **kwargs):
+        return cls(cfr=TabularCfr.zeros(num_states, num_actions), **kwargs)
+
+    def __init__(self, pe_threshold, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.pe_threshold = pe_threshold
+
+    def params(self, *args, **kwargs):
+        return super().params(*args, **kwargs) + [self.pe_threshold]
+
+    @property
+    def policy(self):
+        return self.cfr.policy
+
+    def state_successor_rep(self,
+                            transitions,
+                            discount=1.0,
+                            avg_threshold=1e-7,
+                            max_num_iterations=1000):
+        transitions = tf.convert_to_tensor(transitions)
+        return state_successor_policy_evaluation_op(
+            transitions,
+            self.cfr.policy(),
+            gamma=discount,
+            threshold=avg_threshold * transitions.shape[0].value,
+            max_num_iterations=max_num_iterations)
+
+    def state_distribution(self, root_probs, transitions, **kwargs):
+        return state_distribution(
+            self.state_successor_rep(transitions, **kwargs), root_probs)
+
+    def state_action_distribution(self, **kwargs):
+        return (tf.expand_dims(self.state_distribution(**kwargs), axis=-1) *
+                self.policy())
+
+
+class UncertainRewardDiscountedContinuingKofnLearner(object):
+    def __init__(self, cfr, new_train_env, new_test_env):
+        self.cfr = cfr
+        self.train_env = new_train_env(cfr.opponent, cfr.pe_threshold)
+        self.test_env = new_test_env(cfr.opponent)
+
+    @property
+    def cfr_update(self):
+        return self.cfr.update
+
+    @property
+    def env_update(self):
+        return self.train_env.update
+
+    @property
+    def policy(self):
+        return self.cfr.policy
+
+    @property
+    def test_env_update(self):
+        return self.test_env.update
+
+    def test_ev(self):
+        return tf.squeeze(self.test_env(self.policy()))
