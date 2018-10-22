@@ -1,4 +1,5 @@
 import tensorflow as tf
+import numpy as np
 from driving_gridworld.road import Road
 from driving_gridworld.car import Car
 from driving_gridworld.obstacles import Bump, Pedestrian
@@ -136,6 +137,11 @@ class KofnCfr(FixedParameterAvgCodeCfr):
             return [self.opponent] + super().params()
         else:
             return [sess.run(self.opponent)] + super().params()
+
+    def graph_save(self, name, sess):
+        np.save('{}.params'.format(name), self.params(sess))
+        self.cfr.graph_save('{}.tabular_cfr'.format(name), sess)
+        return self
 
 
 class UncertainRewardDiscountedContinuingKofnTabularCfr(KofnCfr):
