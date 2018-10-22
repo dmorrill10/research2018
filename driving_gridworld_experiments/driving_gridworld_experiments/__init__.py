@@ -3,6 +3,9 @@ from driving_gridworld.road import Road
 from driving_gridworld.car import Car
 from driving_gridworld.obstacles import Bump, Pedestrian
 from driving_gridworld.rewards import TfUniformSituationalReward
+from tf_kofn_robust_policy_optimization.discounted_mdp import \
+    state_successor_policy_evaluation_op, \
+    state_distribution
 
 
 def new_road(headlight_range=3,
@@ -35,3 +38,26 @@ def new_random_reward_function(stopping_reward=0,
         reward_for_critical_error=(
             wc_non_critical_error_reward + critical_error_reward_bonus),
         max_unobstructed_progress_reward=sampled[1] + stopping_reward)
+
+
+def safety_info(root_probs,
+                transitions,
+                sa_safety_info,
+                policy,
+                avg_threshold=1e-7,
+                **kwargs):
+    policy_weighted_safety_info = tf.reduce_sum(
+        sa_safety_info * tf.expand_dims(policy, axis=-1), axis=1)
+
+    root_probs = tf.squeeze(tf.convert_to_tensor(root_probs))
+    num_states = root_probs.shape[0].value
+    sd = tf.squeeze(
+        state_distribution(
+            state_successor_policy_evaluation_op(
+                transitions,
+                policy,
+                threshold=avg_threshold * num_states,
+                **kwargs), root_probs))
+
+    return tf.reduce_sum(
+        tf.expand_dims(sd, axis=-1) * policy_weighted_safety_info, axis=0)
