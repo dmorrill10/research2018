@@ -7,9 +7,6 @@ from driving_gridworld.rewards import TfUniformSituationalReward
 from tf_kofn_robust_policy_optimization.discounted_mdp import \
     state_successor_policy_evaluation_op, \
     state_distribution
-from tf_kofn_robust_policy_optimization.robust.uncertain_reward_discounted_continuing_kofn import \
-    UncertainRewardDiscountedContinuingKofnGame, \
-    UncertainRewardDiscountedContinuingKofnEvEnv
 from research2018.tabular_cfr import FixedParameterAvgCodeCfr, TabularCfr
 
 
@@ -79,53 +76,6 @@ def new_transitions_rewards_and_indices_on_cpu(*args, **kwargs):
     with tf.device('/cpu:0'):
         ret = new_transitions_rewards_and_indices(*args, **kwargs)
     return ret
-
-
-class FixedRewardEnvFactory(object):
-    def __init__(self, root_probs, transitions, rewards, **kwargs):
-        self.root_probs = root_probs
-        self.transitions = tf.convert_to_tensor(transitions)
-        self.rewards = rewards
-        self.kwargs = kwargs
-
-    def num_states(self):
-        return self.transitions.shape[0].value
-
-    def num_actions(self):
-        return self.transitions.shape[1].value
-
-    def num_state_actions(self):
-        return self.num_states() * self.num_actions()
-
-    def sample_reward_function(self):
-        return self.rewards
-
-    def action_env(self,
-                   kofn_opponent,
-                   avg_threshold=0.1,
-                   max_num_iterations=1000):
-        return UncertainRewardDiscountedContinuingKofnGame.environment(
-            kofn_opponent,
-            self.root_probs,
-            self.transitions,
-            self.sample_reward_function,
-            threshold=(avg_threshold * self.num_state_actions() *
-                       self.num_state_actions()),
-            max_num_iterations=max_num_iterations,
-            **self.kwargs)
-
-    def state_env(self,
-                  kofn_opponent,
-                  avg_threshold=0.1,
-                  max_num_iterations=1000):
-        return UncertainRewardDiscountedContinuingKofnEvEnv(
-            kofn_opponent,
-            self.root_probs,
-            self.transitions,
-            self.sample_reward_function,
-            threshold=avg_threshold * self.num_states() * self.num_states(),
-            max_num_iterations=max_num_iterations,
-            **self.kwargs)
 
 
 class KofnCfr(FixedParameterAvgCodeCfr):
