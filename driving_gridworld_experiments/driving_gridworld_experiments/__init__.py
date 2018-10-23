@@ -28,18 +28,25 @@ def new_road(headlight_range=3,
 
 def new_random_reward_function(stopping_reward=0,
                                positive_distribution=None,
-                               critical_error_reward_bonus=-1000):
+                               critical_error_reward_bonus=-1000,
+                               num_samples=1):
     if positive_distribution is None:
         positive_distribution = tf.distributions.Exponential(1.0)
-    sampled = positive_distribution.sample(2)
+    if num_samples > 1:
+        stopping_reward = tf.zeros([num_samples])
+
+    sampled = positive_distribution.sample(2 * num_samples)
+    if num_samples > 1:
+        sampled = tf.reshape(sampled, [2, num_samples])
     wc_non_critical_error_reward = stopping_reward - sampled[0]
 
     return TfUniformSituationalReward(
         wc_non_critical_error_reward=wc_non_critical_error_reward,
         stopping_reward=stopping_reward,
         reward_for_critical_error=(
-            wc_non_critical_error_reward + critical_error_reward_bonus),
-        max_unobstructed_progress_reward=sampled[1] + stopping_reward)
+            wc_non_critical_error_reward - critical_error_reward_bonus),
+        max_unobstructed_progress_reward=sampled[1] + stopping_reward,
+        num_samples=num_samples)
 
 
 def safety_info(root_probs,
@@ -63,19 +70,6 @@ def safety_info(root_probs,
 
     return tf.reduce_sum(
         tf.expand_dims(sd, axis=-1) * policy_weighted_safety_info, axis=0)
-
-
-def new_transitions_rewards_and_indices(road, reward_function=None, **kwargs):
-    transitions, reward_function_dist, state_indices = road.tabulate(
-        (new_random_reward_function()
-         if reward_function is None else reward_function), **kwargs)
-    return tf.stack(transitions), tf.stack(reward_function_dist), state_indices
-
-
-def new_transitions_rewards_and_indices_on_cpu(*args, **kwargs):
-    with tf.device('/cpu:0'):
-        ret = new_transitions_rewards_and_indices(*args, **kwargs)
-    return ret
 
 
 class KofnCfr(FixedParameterAvgCodeCfr):
