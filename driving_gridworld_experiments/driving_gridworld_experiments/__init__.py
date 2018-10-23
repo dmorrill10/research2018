@@ -27,25 +27,25 @@ def new_road(headlight_range=3,
 
 
 def new_random_reward_function(stopping_reward=0,
-                               positive_distribution=None,
+                               wc_non_critical_error_reward_dist=None,
+                               max_progress_reward_dist=None,
                                critical_error_reward_bonus=-1000,
                                num_samples=1):
-    if positive_distribution is None:
-        positive_distribution = tf.distributions.Exponential(1.0)
+    if max_progress_reward_dist is None:
+        max_progress_reward_dist = tf.distributions.Exponential(1.0)
+    if wc_non_critical_error_reward_dist is None:
+        wc_non_critical_error_reward_dist = -tf.distributions.Exponential(1.0)
     if num_samples > 1:
         stopping_reward = tf.zeros([num_samples])
 
-    sampled = positive_distribution.sample(2 * num_samples)
-    if num_samples > 1:
-        sampled = tf.reshape(sampled, [2, num_samples])
-    wc_non_critical_error_reward = stopping_reward - sampled[0]
+    wc_non_critical_error_reward = stopping_reward + wc_non_critical_error_reward_dist.sample(num_samples)
 
     return TfUniformSituationalReward(
         wc_non_critical_error_reward=wc_non_critical_error_reward,
         stopping_reward=stopping_reward,
         reward_for_critical_error=(
             wc_non_critical_error_reward + critical_error_reward_bonus),
-        max_unobstructed_progress_reward=sampled[1] + stopping_reward,
+        max_unobstructed_progress_reward=max_progress_reward_dist.sample(num_samples) + stopping_reward,
         num_samples=num_samples)
 
 
