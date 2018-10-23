@@ -44,7 +44,7 @@ def new_random_reward_function(stopping_reward=0,
         wc_non_critical_error_reward=wc_non_critical_error_reward,
         stopping_reward=stopping_reward,
         reward_for_critical_error=(
-            wc_non_critical_error_reward - critical_error_reward_bonus),
+            wc_non_critical_error_reward + critical_error_reward_bonus),
         max_unobstructed_progress_reward=sampled[1] + stopping_reward,
         num_samples=num_samples)
 
