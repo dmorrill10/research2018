@@ -109,7 +109,8 @@ class FixedRewardEnvFactory(object):
             self.root_probs,
             self.transitions,
             self.sample_reward_function,
-            threshold=avg_threshold * self.num_state_actions(),
+            threshold=(avg_threshold * self.num_state_actions() *
+                       self.num_state_actions()),
             max_num_iterations=max_num_iterations,
             **self.kwargs)
 
@@ -122,7 +123,7 @@ class FixedRewardEnvFactory(object):
             self.root_probs,
             self.transitions,
             self.sample_reward_function,
-            threshold=avg_threshold * self.num_states(),
+            threshold=avg_threshold * self.num_states() * self.num_states(),
             max_num_iterations=max_num_iterations,
             **self.kwargs)
 
