@@ -3,7 +3,6 @@ import numpy as np
 from driving_gridworld.road import Road
 from driving_gridworld.car import Car
 from driving_gridworld.obstacles import Bump, Pedestrian
-from driving_gridworld.rewards import TfUniformSituationalReward
 from tf_kofn_robust_policy_optimization.discounted_mdp import \
     state_successor_policy_evaluation_op, \
     state_distribution
@@ -24,33 +23,6 @@ def new_road(headlight_range=3,
             [{2}, {1}] if allowed_obstacle_appearance_columns is None else
             allowed_obstacle_appearance_columns),
         allow_crashing=allow_crashing)
-
-
-def new_random_reward_function(stopping_reward=0,
-                               wc_non_critical_error_reward=None,
-                               max_progress_reward=None,
-                               critical_error_reward_bonus=-1000,
-                               num_samples=1):
-    if max_progress_reward is None:
-        max_progress_reward = tf.distributions.Exponential(1.0).sample(
-            num_samples)
-    if wc_non_critical_error_reward is None:
-        wc_non_critical_error_reward = -tf.distributions.Exponential(
-            1.0).sample(num_samples)
-    if num_samples > 1:
-        stopping_reward = tf.zeros([num_samples])
-
-    wc_non_critical_error_reward = (
-        stopping_reward + wc_non_critical_error_reward)
-
-    return TfUniformSituationalReward(
-        wc_non_critical_error_reward=wc_non_critical_error_reward,
-        stopping_reward=stopping_reward,
-        reward_for_critical_error=(
-            wc_non_critical_error_reward + critical_error_reward_bonus),
-        max_unobstructed_progress_reward=(
-            max_progress_reward + stopping_reward),
-        num_samples=num_samples)
 
 
 def safety_info(root_probs,
