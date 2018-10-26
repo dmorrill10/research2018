@@ -17,8 +17,10 @@ def new_road(headlight_range=3,
     return Road(
         headlight_range,
         Car(2, 0) if car is None else car,
-        obstacles=([Bump(-1, -1), Pedestrian(-1, -1, speed=1)]
-                   if obstacles is None else obstacles),
+        obstacles=([
+            Bump(-1, -1),
+            Pedestrian(-1, -1, speed=1, prob_of_appearing=0.1)
+        ] if obstacles is None else obstacles),
         allowed_obstacle_appearance_columns=(
             [{2}, {1}] if allowed_obstacle_appearance_columns is None else
             allowed_obstacle_appearance_columns),
