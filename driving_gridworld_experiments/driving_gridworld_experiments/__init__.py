@@ -5,6 +5,7 @@ from driving_gridworld.car import Car
 from driving_gridworld.obstacles import Bump, Pedestrian
 from tf_kofn_robust_policy_optimization.discounted_mdp import \
     state_successor_policy_evaluation_op, \
+    dual_state_value_policy_evaluation_op, \
     state_distribution
 from research2018.tabular_cfr import FixedParameterAvgCodeCfr, TabularCfr
 
@@ -32,22 +33,20 @@ def safety_info(root_probs,
                 sa_safety_info,
                 policy,
                 avg_threshold=1e-7,
-                **kwargs):
-    policy_weighted_safety_info = tf.reduce_sum(
-        sa_safety_info * tf.expand_dims(policy, axis=-1), axis=1)
+                discount=1.0):
+    state_safety_info = dual_state_value_policy_evaluation_op(
+        transitions, policy, sa_safety_info, gamma=discount)
 
-    root_probs = tf.squeeze(tf.convert_to_tensor(root_probs))
-    num_states = root_probs.shape[0].value
-    sd = tf.squeeze(
-        state_distribution(
-            state_successor_policy_evaluation_op(
-                transitions,
-                policy,
-                threshold=avg_threshold * num_states,
-                **kwargs), root_probs))
+    root_probs = tf.convert_to_tensor(root_probs)
 
-    return tf.reduce_sum(
-        tf.expand_dims(sd, axis=-1) * policy_weighted_safety_info, axis=0)
+    if len(root_probs.shape) < 2:
+        root_probs = tf.reshape(root_probs,
+                                [dim.value for dim in root_probs.shape] + [1] *
+                                (len(sa_safety_info.shape) - 1))
+    else:
+        root_probs = tf.transpose(
+            tf.expand_dims(root_probs, axis=-1), [1, 2, 0])
+    return tf.reduce_sum(state_safety_info * root_probs, axis=0)
 
 
 class KofnCfr(FixedParameterAvgCodeCfr):
