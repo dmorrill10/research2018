@@ -28,12 +28,7 @@ def new_road(headlight_range=3,
         allow_crashing=allow_crashing)
 
 
-def safety_info(root_probs,
-                transitions,
-                sa_safety_info,
-                policy,
-                avg_threshold=1e-7,
-                discount=1.0):
+def safety_info(root_probs, transitions, sa_safety_info, policy, discount=1.0):
     '''Assumes the first dimension is a batch dimension.'''
     state_safety_info = dual_state_value_policy_evaluation_op(
         transitions, policy, sa_safety_info, gamma=discount)
@@ -46,7 +41,7 @@ def safety_info(root_probs,
     root_probs = tf.convert_to_tensor(root_probs)
     if len(root_probs.shape) < 2:
         root_probs = tf.expand_dims(root_probs, 0)
-    return tf.reduce_sum(state_safety_info * root_probs, axis=-1)
+    return tf.reduce_sum(root_probs * state_safety_info, axis=-1)
 
 
 class KofnCfr(FixedParameterAvgCodeCfr):
@@ -71,29 +66,14 @@ class UncertainRewardDiscountedContinuingKofnTabularCfr(KofnCfr):
     def from_num_states_and_actions(cls, num_states, num_actions, **kwargs):
         return cls(cfr=TabularCfr.zeros(num_states, num_actions), **kwargs)
 
-    def __init__(self, pe_threshold, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.pe_threshold = pe_threshold
-
-    def params(self, *args, **kwargs):
-        return super().params(*args, **kwargs) + [self.pe_threshold]
-
     @property
     def policy(self):
         return self.cfr.policy
 
-    def state_successor_rep(self,
-                            transitions,
-                            discount=1.0,
-                            avg_threshold=1e-7,
-                            max_num_iterations=1000):
+    def state_successor_rep(self, transitions, discount=1.0):
         transitions = tf.convert_to_tensor(transitions)
         return state_successor_policy_evaluation_op(
-            transitions,
-            self.cfr.policy(),
-            gamma=discount,
-            threshold=avg_threshold * transitions.shape[0].value,
-            max_num_iterations=max_num_iterations)
+            transitions, self.cfr.policy(), gamma=discount)
 
     def state_distribution(self, root_probs, transitions, **kwargs):
         return state_distribution(
@@ -107,20 +87,12 @@ class UncertainRewardDiscountedContinuingKofnTabularCfr(KofnCfr):
 class UncertainRewardDiscountedContinuingKofnLearner(object):
     def __init__(self, cfr, new_train_env, new_test_env):
         self.cfr = cfr
-        self.train_env = new_train_env(cfr.opponent, cfr.pe_threshold)
+        self.train_env = new_train_env(cfr.opponent)
         self.test_env = new_test_env(cfr.opponent)
-
-    @property
-    def env_update(self):
-        return self.train_env.update
 
     @property
     def policy(self):
         return self.cfr.policy
-
-    @property
-    def test_env_update(self):
-        return self.test_env.update
 
     def cfr_update(self, *args, **kwargs):
         return self.cfr.update(self.train_env, *args, **kwargs)
