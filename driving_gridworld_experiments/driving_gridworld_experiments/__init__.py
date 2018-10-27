@@ -34,19 +34,19 @@ def safety_info(root_probs,
                 policy,
                 avg_threshold=1e-7,
                 discount=1.0):
+    '''Assumes the first dimension is a batch dimension.'''
     state_safety_info = dual_state_value_policy_evaluation_op(
         transitions, policy, sa_safety_info, gamma=discount)
 
-    root_probs = tf.convert_to_tensor(root_probs)
-
-    if len(root_probs.shape) < 2:
-        root_probs = tf.reshape(root_probs,
-                                [dim.value for dim in root_probs.shape] + [1] *
-                                (len(sa_safety_info.shape) - 1))
+    if len(state_safety_info.shape) < 2:
+        state_safety_info = tf.expand_dims(state_safety_info, 0)
     else:
-        root_probs = tf.transpose(
-            tf.expand_dims(root_probs, axis=-1), [1, 2, 0])
-    return tf.reduce_sum(state_safety_info * root_probs, axis=0)
+        state_safety_info = tf.transpose(state_safety_info)
+
+    root_probs = tf.convert_to_tensor(root_probs)
+    if len(root_probs.shape) < 2:
+        root_probs = tf.expand_dims(root_probs, 0)
+    return tf.reduce_sum(state_safety_info * root_probs, axis=-1)
 
 
 class KofnCfr(FixedParameterAvgCodeCfr):
