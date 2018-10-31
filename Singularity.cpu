@@ -28,11 +28,11 @@ To install python libraries after this image is built, create a virtual environm
   mkdir -p /scratch /data /usr/bin
 
   apt-get update
-  apt-get install ca-certificates
+  apt-get install ca-certificates curl
   apt-get clean
-  locale-gen en_US.UTF-8
 
-  pip install --upgrade pip
+  curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
+  python get-pip.py
   pip install numpy virtualenv
 
 %runscript
