@@ -61,7 +61,7 @@ class TabularCfr(object):
         return rm_policy(self.regrets)
 
     def avg(self):
-        return normalized(self.policy_sum)
+        return normalized(self.policy_sum, axis=1)
 
     def policy(self, mix_avg=1.0):
         use_cur = mix_avg < 1
