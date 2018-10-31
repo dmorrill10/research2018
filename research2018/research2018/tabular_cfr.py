@@ -1,7 +1,10 @@
 import tensorflow as tf
 import numpy as np
 from tensorflow.python.ops.resource_variable_ops import ResourceVariable
-from tf_contextual_prediction_with_expert_advice import rm_policy, utility
+from tf_contextual_prediction_with_expert_advice import \
+    rm_policy, \
+    utility, \
+    normalized
 
 
 def linear_avg_next_policy_sum(policy_sum, _cur, t):
@@ -58,7 +61,7 @@ class TabularCfr(object):
         return rm_policy(self.regrets)
 
     def avg(self):
-        return rm_policy(self.policy_sum)
+        return normalized(self.policy_sum)
 
     def policy(self, mix_avg=1.0):
         use_cur = mix_avg < 1
@@ -72,22 +75,6 @@ class TabularCfr(object):
             avg = self.avg()
             pol = mix_avg * avg + pol
         return pol
-
-    def ev(self, context_value_env, context_weights=None, mix_avg=0.0):
-        context_values = context_value_env(self.policy(mix_avg))
-        if context_weights is not None:
-            context_weights = tf.convert_to_tensor(context_weights)
-            if len(context_weights.shape) < len(context_values.shape):
-                extra_dims = (
-                    len(context_values.shape) - len(context_weights.shape))
-                context_weights = tf.reshape(
-                    context_weights,
-                    ([s.value
-                      for s in context_weights.shape] + [1] * extra_dims))
-            context_values = context_weights * context_values
-            return tf.reduce_sum(context_values)
-        else:
-            return tf.reduce_mean(context_values)
 
     def update(self, env, mix_avg=0.0, rm_plus=False, next_policy_sum=None):
         cur = self.cur()

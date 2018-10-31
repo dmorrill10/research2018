@@ -19,8 +19,8 @@ def new_road(headlight_range=3,
         headlight_range,
         Car(2, 0) if car is None else car,
         obstacles=([
-            Bump(-1, -1, prob_of_appearing=0.2),
-            Pedestrian(-1, -1, speed=1, prob_of_appearing=0.2)
+            Bump(-1, -1, prob_of_appearing=0.5),
+            Pedestrian(-1, -1, speed=1, prob_of_appearing=0.5)
         ] if obstacles is None else obstacles),
         allowed_obstacle_appearance_columns=(
             [{2}, {1}] if allowed_obstacle_appearance_columns is None else
@@ -73,7 +73,7 @@ class UncertainRewardDiscountedContinuingKofnTabularCfr(KofnCfr):
     def state_successor_rep(self, transitions, discount=1.0):
         transitions = tf.convert_to_tensor(transitions)
         return state_successor_policy_evaluation_op(
-            transitions, self.cfr.policy(), gamma=discount)
+            transitions, self.policy(), gamma=discount)
 
     def state_distribution(self, root_probs, transitions, **kwargs):
         return state_distribution(
@@ -84,7 +84,7 @@ class UncertainRewardDiscountedContinuingKofnTabularCfr(KofnCfr):
                 self.policy())
 
 
-class UncertainRewardDiscountedContinuingKofnLearner(object):
+class KofnCfrLearner(object):
     def __init__(self, cfr, new_train_env, new_test_env):
         self.cfr = cfr
         self.train_env = new_train_env(cfr.opponent)
@@ -94,8 +94,8 @@ class UncertainRewardDiscountedContinuingKofnLearner(object):
     def policy(self):
         return self.cfr.policy
 
-    def cfr_update(self, *args, **kwargs):
+    def update(self, *args, **kwargs):
         return self.cfr.update(self.train_env, *args, **kwargs)
 
     def test_ev(self):
-        return tf.squeeze(self.test_env(self.policy()))
+        return self.test_env(self.policy())
