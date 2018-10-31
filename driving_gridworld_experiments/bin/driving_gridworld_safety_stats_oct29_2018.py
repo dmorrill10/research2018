@@ -21,8 +21,6 @@ except:
     os.system('git clone https://github.com/deepmind/pycolab.git')
     os.system('cd pycolab/ && pip install .')
 
-import os
-
 git_checkpoint = 'git checkout master && git pull && git rev-list -n1 --before=2018-11-01 master | xargs git checkout'
 
 
