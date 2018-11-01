@@ -1,5 +1,5 @@
 Bootstrap: docker
-From: tensorflow/tensorflow:1.11.0-gpu-py3
+From: tensorflow/tensorflow:1.12.0-rc2-gpu-py3
 
 %help
 
