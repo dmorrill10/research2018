@@ -125,9 +125,8 @@ def new_road(headlight_range=3):
         headlight_range,
         Car(2, 0),
         obstacles=[
-            Bump(-1, -1, prob_of_appearing=0.5),
-            #             Bump(-1, -1, prob_of_appearing=0.5),
-            Pedestrian(-1, -1, speed=1, prob_of_appearing=0.5)
+            Bump(-1, -1, prob_of_appearing=0.16),
+            Pedestrian(-1, -1, speed=1, prob_of_appearing=0.13)
         ],
         allowed_obstacle_appearance_columns=[{2}, {1}],
         allow_crashing=False)
@@ -137,8 +136,6 @@ def new_road(headlight_range=3):
 
 set_good_defaults()
 np.set_printoptions(formatter={'float': '{:0.4f}'.format})
-
-sess = tf.InteractiveSession()
 
 os.system('ls')
 """# Experiments
@@ -193,7 +190,6 @@ num_states
 
 root_probs_tf = tf.one_hot(
     state_indices[game.road.copy().to_key()], depth=num_states)
-root_probs_np = sess.run(root_probs_tf)
 
 sasp_safety_info, _si = game.road.safety_information()
 for k, v in _si.items():
@@ -210,28 +206,9 @@ sa_safety_info.shape
 ### Imports and Definitions
 """
 
-# ks = [1]
-# v = ks[-1]
-# while True:
-#   v = np.ceil(1.2 * v)
-#   a = int(v)
-#   if a >= n: break
-#   if a == ks[-1]: continue
-#   ks.append(a)
-#   v = ks[-1]
-# ks.append(n)
 _n = 400
+ks = list(range(_n // 10, _n + 1, _n // 10))
 # ks = [1] + list(range(n // 10, n, n // 10)) + [n]
-# ks = list(range(_n // 10, _n + 1, _n // 10))
-# ks = list(range(1, n + 1))
-# ks = [n]
-# ks = list(range(50, 61))
-# ks = [50]
-ks = [210]
-# ks = [21]
-# ks = [n]
-# ks = [270 * n // 1000]
-# ks = [210]
 kofn_opponents = [deterministic_kofn_weights(k, n) for k in ks]
 print(len(ks))
 ks
@@ -300,161 +277,147 @@ def fixed_reward_test_env(kofn_opponent):
     return env
 
 
-@load_list
-def load_learners():
-    learners = [
-        UncertainRewardDiscountedContinuingKofnTabularCfr.load(
-            'learner.{}'.format(i)) for i in range(len(ks))
-    ]
-    for learner in learners:
-        sess.run(learner.cfr.policy_sum.initializer)
-    return learners
+with tf.Session() as sess:
 
-
-def save_learners(learners):
-    for i, learner in enumerate(learners):
-        learner.graph_save('learner.{}'.format(i), sess)
-
-
-def load_eot():
-    return np.load('eot.npy')
-
-
-def save_eot(eot):
-    np.save('eot', eot)
-
-
-def load_ci():
-    return np.load('ci.npy')
-
-
-def save_ci(ci):
-    np.save('ci', ci)
-
-
-def load_training_data():
-    return load_learners(), load_eot(), load_ci()
-
-
-def save_training_data(learners_eot_ci):
-    save_learners(learners_eot_ci[0])
-    save_eot(learners_eot_ci[1])
-    save_ci(learners_eot_ci[2])
-
-
-def compute_learners_and_eot():
-    eot = []
-    checkpoint_iterations = []
-
-    reset_random(42)
-
-    timer = Timer('create learners')
-
-    with timer:
+    @load_list
+    def load_learners():
         learners = [
-            KofnCfrLearner(
-                UncertainRewardDiscountedContinuingKofnTabularCfr.
-                from_num_states_and_actions(
-                    num_states,
-                    num_actions,
-                    opponent=opponent,
-                    use_plus=use_plus,
-                    mix_avg=mix_avg,
-                    next_policy_sum_code=0.9
-                    #                 (
-                    #                     UncertainRewardDiscountedContinuingKofnTabularCfr.USE_LINEAR_AVG
-                    #                 )
-                ),
-                fixed_reward_env,
-                fixed_reward_test_env) for opponent in kofn_opponents
+            UncertainRewardDiscountedContinuingKofnTabularCfr.load(
+                'learner.{}'.format(i)) for i in range(len(ks))
         ]
-    print(timer)
+        for learner in learners:
+            sess.run(learner.cfr.policy_sum.initializer)
+        return learners
 
-    timer = Timer('create EV nodes')
-    with timer:
-        evs = [learner.test_ev() for learner in learners]
-    print(timer)
+    def save_learners(learners):
+        for i, learner in enumerate(learners):
+            learner.graph_save('learner.{}'.format(i), sess)
 
-    timer = Timer('create update nodes')
-    with timer:
-        updates = [learner.update()[-1] for learner in learners]
-    print(timer)
+    def load_eot():
+        return np.load('eot.npy')
 
-    timer = Timer('init')
-    with timer:
-        sess.run(tf.global_variables_initializer())
-    print(timer)
+    def save_eot(eot):
+        np.save('eot', eot)
 
-    timer = AccumulatingTimer('training')
+    def load_ci():
+        return np.load('ci.npy')
 
-    for t in range(1, num_iterations + 1):
+    def save_ci(ci):
+        np.save('ci', ci)
+
+    def load_training_data():
+        return load_learners(), load_eot(), load_ci()
+
+    def save_training_data(learners_eot_ci):
+        save_learners(learners_eot_ci[0])
+        save_eot(learners_eot_ci[1])
+        save_ci(learners_eot_ci[2])
+
+    def compute_learners_and_eot():
+        eot = []
+        checkpoint_iterations = []
+
+        reset_random(42)
+
+        timer = Timer('create learners')
+
         with timer:
-            sess.run(updates)
-            if t == 1 or t % print_every == 0:
-                evs_np = sess.run(evs)
-                eot.append(evs_np)
-                checkpoint_iterations.append(t)
-                print('{}: {}'.format(t, evs_np))
-                print('{}: {}'.format(t, str(timer)))
-    return [l.cfr for l in learners], np.array(eot), checkpoint_iterations
+            learners = [
+                KofnCfrLearner(
+                    UncertainRewardDiscountedContinuingKofnTabularCfr.
+                    from_num_states_and_actions(
+                        num_states,
+                        num_actions,
+                        opponent=opponent,
+                        use_plus=use_plus,
+                        mix_avg=mix_avg,
+                        next_policy_sum_code=0.9
+                        #                 (
+                        #                     UncertainRewardDiscountedContinuingKofnTabularCfr.USE_LINEAR_AVG
+                        #                 )
+                    ),
+                    fixed_reward_env,
+                    fixed_reward_test_env) for opponent in kofn_opponents
+            ]
+        print(timer)
 
+        timer = Timer('create EV nodes')
+        with timer:
+            evs = [learner.test_ev() for learner in learners]
+        print(timer)
 
-@load_or_save(load_training_data, save_training_data)
-def learners_and_eot():
-    return compute_learners_and_eot()
+        timer = Timer('create update nodes')
+        with timer:
+            updates = [learner.update()[-1] for learner in learners]
+        print(timer)
 
+        timer = Timer('init')
+        with timer:
+            sess.run(tf.global_variables_initializer())
+        print(timer)
 
-learners, eot_np, checkpoint_iterations = learners_and_eot()
+        timer = AccumulatingTimer('training')
 
-# from google.colab import files
-# trace = timeline.Timeline(step_stats=run_metadata.step_stats)
-# timeline_file_name = '{}.kofn_cfr.1000t.timeline.ctf.json'.format(experiment_name)
-# trace_file = open(timeline_file_name, 'w')
-# trace_file.write(trace.generate_chrome_trace_format())
-# files.download(timeline_file_name)
+        for t in range(1, num_iterations + 1):
+            with timer:
+                sess.run(updates)
+                if t == 1 or t % print_every == 0:
+                    evs_np = sess.run(evs)
+                    eot.append(evs_np)
+                    checkpoint_iterations.append(t)
+                    print('{}: {}'.format(t, evs_np))
+                    print('{}: {}'.format(t, str(timer)))
+        return [l.cfr for l in learners], np.array(eot), checkpoint_iterations
 
-os.system('ls')
+    @load_or_save(load_training_data, save_training_data)
+    def learners_and_eot():
+        return compute_learners_and_eot()
 
-colors = tableu20_color_table()
-colors = [next(colors) for _ in learners]
+    learners, eot_np, checkpoint_iterations = learners_and_eot()
 
-line_styles = line_style_table()
-line_styles = [next(line_styles) for _ in learners]
+    os.system('ls')
 
-fig, axes_list = plt.subplots(1, 1)
-fig.set_size_inches((10, 5))
-for ki, k in enumerate(ks):
-    axes_list.plot(
-        checkpoint_iterations,
-        eot_np[:, ki],
-        label='{}-of-{}'.format(k, n),
-        color=colors[ki],
-        ls=line_styles[ki])
-axes_list.set_xlabel('iteration')
-axes_list.set_ylabel('EV')
-axes_list.set_ylim([-0.1, 2.5])
-# plt.legend()
-None
+    colors = tableu20_color_table()
+    colors = [next(colors) for _ in learners]
 
-timer = Timer('safety info')
-with timer:
-    kofn_safety_info = np.array(
-        sess.run([
-            tf.reduce_sum(
-                (tf.expand_dims(root_probs_tf, axis=0
-                                ) * dual_state_value_policy_evaluation_op(
-                                    transitions_tensor,
-                                    learner.policy(),
-                                    sa_safety_info,
-                                    gamma=discount)),
-                axis=-1) * (1.0 - discount) for learner in learners
-        ]))
-print(timer)
+    line_styles = line_style_table()
+    line_styles = [next(line_styles) for _ in learners]
+
+    fig, axes_list = plt.subplots(1, 1)
+    fig.set_size_inches((10, 5))
+    for ki, k in enumerate(ks):
+        axes_list.plot(
+            checkpoint_iterations,
+            eot_np[:, ki],
+            label='{}-of-{}'.format(k, n),
+            color=colors[ki],
+            ls=line_styles[ki])
+    axes_list.set_xlabel('iteration')
+    axes_list.set_ylabel('EV')
+    axes_list.set_ylim([-0.1, 2.5])
+    plt.legend()
+    plt.savefig('convergence.pdf')
+    None
+
+    timer = Timer('safety info')
+    with timer:
+        kofn_safety_info = np.array(
+            sess.run([
+                tf.reduce_sum(
+                    (tf.expand_dims(root_probs_tf, axis=0
+                                    ) * dual_state_value_policy_evaluation_op(
+                                        transitions_tensor,
+                                        learner.policy(),
+                                        sa_safety_info,
+                                        gamma=discount)),
+                    axis=-1) * (1.0 - discount) for learner in learners
+            ]))
+    print(timer)
 print(kofn_safety_info.shape)
 kofn_safety_info
 
-(kofn_wall_collisions, kofn_pedestrians, kofn_bumps, kofn_ditch, kofn_speeds,
- kofn_progress, kofn_lane_changes) = [
+(kofn_wall_collisions, kofn_pedestrians, kofn_bumps, kofn_ditch,
+ kofn_speeds, kofn_progress, kofn_lane_changes) = [
      kofn_safety_info[:, j] for j in range(kofn_safety_info.shape[1])
  ]
 kofn_bumps = kofn_bumps / 0.5
@@ -490,6 +453,7 @@ plt.ylabel("avg speed")
 plt.legend()
 plt.ylim([0, 4])
 plt.xlim([0, 1])
+plt.savefig('speed.pdf')
 None
 
 # plt.plot(
@@ -512,4 +476,5 @@ plt.ylabel("avg time unsafe")
 plt.legend()
 plt.ylim([0, 0.5])
 plt.xlim([0, 1])
+plt.savefig('safety.pdf')
 None
