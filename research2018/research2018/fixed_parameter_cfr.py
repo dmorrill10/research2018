@@ -11,7 +11,7 @@ class FixedParameterCfr(object):
     def load(cls, name, cfr_cls=TabularCfr):
         return cls(
             cfr=cfr_cls.load('{}.cfr'.format(name)),
-            **np.load('{}.params.npy'.format(name)))
+            **np.load('{}.params.npy'.format(name)).item())
 
     def __init__(self, cfr, use_plus=False, mix_avg=None):
         self.cfr = cfr
