@@ -7,7 +7,7 @@ from tf_kofn_robust_policy_optimization.discounted_mdp import \
     state_successor_policy_evaluation_op, \
     dual_state_value_policy_evaluation_op, \
     state_distribution
-from research2018.tabular_cfr import FixedParameterAvgCodeCfr, TabularCfr
+from research2018.tabular_cfr import TabularCfr
 
 
 def new_road(headlight_range=3,
@@ -44,7 +44,9 @@ def safety_info(root_probs, transitions, sa_safety_info, policy, discount=1.0):
     return tf.reduce_sum(root_probs * state_safety_info, axis=-1)
 
 
-class KofnCfr(FixedParameterAvgCodeCfr):
+class KofnCfr(object):
+    '''k-of-n mixin designed to override a `FixedParameterCfr` class.'''
+
     def __init__(self, opponent, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.opponent = opponent
@@ -61,7 +63,12 @@ class KofnCfr(FixedParameterAvgCodeCfr):
         return self
 
 
-class UncertainRewardDiscountedContinuingKofnTabularCfr(KofnCfr):
+class UrdcKofnTabularCfr(KofnCfr):
+    '''
+    k-of-n mixin specific to tabular uncertain reward discounted continuing
+    MDPs designed to override a `FixedParameterCfr` class.
+    '''
+
     @classmethod
     def from_num_states_and_actions(cls, num_states, num_actions, **kwargs):
         return cls(cfr=TabularCfr.zeros(num_states, num_actions), **kwargs)
@@ -82,20 +89,3 @@ class UncertainRewardDiscountedContinuingKofnTabularCfr(KofnCfr):
     def state_action_distribution(self, **kwargs):
         return (tf.expand_dims(self.state_distribution(**kwargs), axis=-1) *
                 self.policy())
-
-
-class KofnCfrLearner(object):
-    def __init__(self, cfr, new_train_env, new_test_env):
-        self.cfr = cfr
-        self.train_env = new_train_env(cfr.opponent)
-        self.test_env = new_test_env(cfr.opponent)
-
-    @property
-    def policy(self):
-        return self.cfr.policy
-
-    def update(self, *args, **kwargs):
-        return self.cfr.update(self.train_env, *args, **kwargs)
-
-    def test_ev(self):
-        return self.test_env(self.policy())
