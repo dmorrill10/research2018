@@ -26,7 +26,7 @@ class TabularCfrCurrent(object):
 
     @classmethod
     def load(cls, name):
-        return cls(*np.load('{}.npy'.format(name)))
+        return cls(np.load('{}.npy'.format(name)))
 
     def __init__(self, regrets):
         self.regrets = ResourceVariable(regrets)
