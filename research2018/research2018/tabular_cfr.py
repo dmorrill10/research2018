@@ -97,7 +97,7 @@ class TabularCfr(object):
         return self
 
     def graph_save(self, name, sess):
-        self._cur.graph_save('{}.cur'.format(name))
+        self._cur.graph_save('{}.cur'.format(name), sess)
         np.save(name, sess.run([self.policy_sum, self.t]))
         return self
 

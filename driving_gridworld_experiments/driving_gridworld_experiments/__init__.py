@@ -54,8 +54,12 @@ class UrdcKofnTabularCfr(KofnCfr):
     '''
 
     @classmethod
-    def from_num_states_and_actions(cls, num_states, num_actions, **kwargs):
-        return cls(cfr=TabularCfr.zeros(num_states, num_actions), **kwargs)
+    def from_num_states_and_actions(cls,
+                                    num_states,
+                                    num_actions,
+                                    cfr_cls=TabularCfr,
+                                    **kwargs):
+        return cls(cfr=cfr_cls.zeros(num_states, num_actions), **kwargs)
 
     @classmethod
     def train_env(cls,
