@@ -42,16 +42,18 @@ def safety_info(root_probs,
 
     if len(state_safety_info.shape) < 2:
         state_safety_info = tf.expand_dims(state_safety_info, 0)
-    else:
-        state_safety_info = tf.transpose(state_safety_info)
 
     root_probs = tf.convert_to_tensor(root_probs)
     if len(root_probs.shape) < 2:
         root_probs = tf.expand_dims(root_probs, 0)
 
+    discount = tf.convert_to_tensor(discount)
+    discount = (tf.expand_dims(discount, 0)
+                if len(discount.shape) == 1 else tf.transpose(discount))
+
     if normalize:
         state_safety_info = (1.0 - discount) * state_safety_info
-    return tf.reduce_sum((root_probs * state_safety_info), axis=-1)
+    return tf.reduce_sum(root_probs * state_safety_info, axis=-1)
 
 
 class UrdcKofnTabularCfr(KofnCfr):
