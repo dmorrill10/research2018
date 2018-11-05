@@ -6,6 +6,9 @@ from tf_kofn_robust_policy_optimization.discounted_mdp import \
     state_successor_policy_evaluation_op, \
     dual_state_value_policy_evaluation_op, \
     state_distribution
+from tf_kofn_robust_policy_optimization.robust.kofn import \
+    KofnEvsAndWeights, \
+    kofn_action_values
 from research2018.tabular_cfr import TabularCfr
 from research2018.kofn import KofnCfr
 
@@ -53,6 +56,75 @@ class UrdcKofnTabularCfr(KofnCfr):
     @classmethod
     def from_num_states_and_actions(cls, num_states, num_actions, **kwargs):
         return cls(cfr=TabularCfr.zeros(num_states, num_actions), **kwargs)
+
+    @classmethod
+    def train_env(cls,
+                  root_probs,
+                  transitions,
+                  reward_dataset,
+                  discount,
+                  n,
+                  kofn_opponent,
+                  num_samples=1):
+        def env(policy):
+            '''world X state'''
+            v = dual_state_value_policy_evaluation_op(
+                transitions, policy, reward_dataset, gamma=discount)
+            '''state X action X world'''
+            q = tf.transpose(
+                reward_dataset +
+                discount * tf.tensordot(v, transitions, axes=[-1, -1]),
+                [1, 2, 0])
+            v = tf.transpose(v)
+
+            offset = 0
+            kofn_q = []
+            for sample_idx in range(num_samples):
+                next_offset = n * (sample_idx + 1)
+                sample_v = v[:, offset:next_offset]
+                sample_q = q[:, :, offset:next_offset]
+
+                kofn_evs_and_weights = KofnEvsAndWeights(
+                    sample_v, kofn_opponent, context_weights=root_probs)
+
+                kofn_q.append(
+                    kofn_action_values(sample_q,
+                                       kofn_evs_and_weights.world_weights))
+
+                offset = next_offset
+            return tf.reduce_mean(tf.stack(kofn_q, -1), axis=-1)
+
+        return env
+
+    @classmethod
+    def test_env(cls,
+                 root_probs,
+                 transitions,
+                 reward_dataset,
+                 discount,
+                 n,
+                 kofn_opponent,
+                 num_samples=1):
+        def env(policy):
+            '''world X state'''
+            v = dual_state_value_policy_evaluation_op(
+                transitions, policy, reward_dataset, gamma=discount)
+            v = tf.transpose(v)
+            offset = 0
+            kofn_ev = []
+            for sample_idx in range(num_samples):
+                next_offset = n * (sample_idx + 1)
+
+                kofn_ev.append(
+                    KofnEvsAndWeights(
+                        v[:, offset:next_offset],
+                        kofn_opponent,
+                        context_weights=root_probs).ev)
+
+                offset = next_offset
+            return tf.reduce_mean(tf.stack(kofn_ev, -1), axis=-1)
+
+        return env
 
     @property
     def policy(self):
