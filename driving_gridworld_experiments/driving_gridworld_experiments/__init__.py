@@ -13,25 +13,24 @@ from research2018.tabular_cfr import TabularCfr
 from research2018.kofn import KofnCfr
 
 
-def new_road(headlight_range=3,
-             allow_crashing=False,
-             car=None,
-             obstacles=None,
-             allowed_obstacle_appearance_columns=None):
+def new_road(headlight_range=3):
     return Road(
         headlight_range,
-        Car(2, 0) if car is None else car,
-        obstacles=([
-            Bump(-1, -1, prob_of_appearing=0.5),
-            Pedestrian(-1, -1, speed=1, prob_of_appearing=0.5)
-        ] if obstacles is None else obstacles),
-        allowed_obstacle_appearance_columns=(
-            [{2}, {1}] if allowed_obstacle_appearance_columns is None else
-            allowed_obstacle_appearance_columns),
-        allow_crashing=allow_crashing)
+        Car(2, 0),
+        obstacles=[
+            Bump(-1, -1, prob_of_appearing=1 - 0.5**(1 / 4.0)),
+            Pedestrian(-1, -1, speed=1, prob_of_appearing=1 - 0.5**(1 / 5.0))
+        ],
+        allowed_obstacle_appearance_columns=[{2}, {1}],
+        allow_crashing=True)
 
 
-def safety_info(root_probs, transitions, sa_safety_info, policy, discount=1.0):
+def safety_info(root_probs,
+                transitions,
+                sa_safety_info,
+                policy,
+                discount=1.0,
+                normalize=True):
     '''Assumes the first dimension is a batch dimension.'''
     state_safety_info = dual_state_value_policy_evaluation_op(
         transitions, policy, sa_safety_info, gamma=discount)
@@ -44,7 +43,10 @@ def safety_info(root_probs, transitions, sa_safety_info, policy, discount=1.0):
     root_probs = tf.convert_to_tensor(root_probs)
     if len(root_probs.shape) < 2:
         root_probs = tf.expand_dims(root_probs, 0)
-    return tf.reduce_sum(root_probs * state_safety_info, axis=-1)
+
+    if normalize:
+        state_safety_info = (1.0 - tf.transpose(discount)) * state_safety_info
+    return tf.reduce_sum((root_probs * state_safety_info), axis=-1)
 
 
 class UrdcKofnTabularCfr(KofnCfr):
