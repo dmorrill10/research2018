@@ -196,4 +196,7 @@ def tabular_road(headlight_range=3,
         reward_dataset = (
             reward_dataset / -tf.reshape(cer, [1, 1, num_reward_functions]))
 
-    return transitions, tf.transpose(reward_dataset, [2, 0, 1])
+    root_probs = tf.one_hot(
+        state_indices[game.road.copy().to_key()], depth=len(state_indices))
+    return (root_probs, transitions, tf.transpose(reward_dataset, [2, 0, 1]),
+            state_indices)
