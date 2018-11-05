@@ -9,8 +9,9 @@ from research2018.tabular_cfr import \
 class FixedParameterCfr(object):
     @classmethod
     def load(cls, name, cfr_cls=TabularCfr):
-        return cls(*np.load('{}.params.npy'.format(name)),
-                   cfr_cls.load('{}.cfr'.format(name)))
+        return cls(
+            cfr=cfr_cls.load('{}.cfr'.format(name)),
+            **np.load('{}.params.npy'.format(name)))
 
     def __init__(self, cfr, use_plus=False, mix_avg=None):
         self.cfr = cfr
@@ -18,7 +19,7 @@ class FixedParameterCfr(object):
         self.mix_avg = mix_avg
 
     def params(self):
-        return [self.use_plus, self.mix_avg]
+        return {'use_plus': self.use_plus, 'mix_avg': self.mix_avg}
 
     def save(self, name):
         np.save('{}.params'.format(name), self.params())

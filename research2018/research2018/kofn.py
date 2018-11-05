@@ -9,10 +9,10 @@ class KofnCfr(object):
         self.opponent = opponent
 
     def params(self, sess=None):
-        if sess is None:
-            return [self.opponent] + super().params()
-        else:
-            return [sess.run(self.opponent)] + super().params()
+        params = super().params()
+        opponent = self.opponent if sess is None else sess.run(self.opponent)
+        params['opponent'] = opponent
+        return params
 
     def graph_save(self, name, sess):
         np.save('{}.params'.format(name), self.params(sess))
