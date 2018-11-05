@@ -1,5 +1,4 @@
 import tensorflow as tf
-import numpy as np
 from driving_gridworld.road import Road
 from driving_gridworld.car import Car
 from driving_gridworld.obstacles import Bump, Pedestrian
@@ -8,6 +7,7 @@ from tf_kofn_robust_policy_optimization.discounted_mdp import \
     dual_state_value_policy_evaluation_op, \
     state_distribution
 from research2018.tabular_cfr import TabularCfr
+from research2018.kofn import KofnCfr
 
 
 def new_road(headlight_range=3,
@@ -42,25 +42,6 @@ def safety_info(root_probs, transitions, sa_safety_info, policy, discount=1.0):
     if len(root_probs.shape) < 2:
         root_probs = tf.expand_dims(root_probs, 0)
     return tf.reduce_sum(root_probs * state_safety_info, axis=-1)
-
-
-class KofnCfr(object):
-    '''k-of-n mixin designed to override a `FixedParameterCfr` class.'''
-
-    def __init__(self, opponent, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.opponent = opponent
-
-    def params(self, sess=None):
-        if sess is None:
-            return [self.opponent] + super().params()
-        else:
-            return [sess.run(self.opponent)] + super().params()
-
-    def graph_save(self, name, sess):
-        np.save('{}.params'.format(name), self.params(sess))
-        self.cfr.graph_save('{}.cfr'.format(name), sess)
-        return self
 
 
 class UrdcKofnTabularCfr(KofnCfr):
