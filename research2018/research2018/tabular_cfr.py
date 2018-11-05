@@ -49,13 +49,16 @@ class TabularCfr(object):
     def num_actions(self):
         return tf.shape(self.regrets)[1]
 
-    def reset(self):
+    def clear(self):
         for v in [self.regrets, self.policy_sum]:
             v.assign(tf.zeros_like(v))
         self.t.assign(0)
 
-    def copy(self):
-        return self.__class__(self.regrets, self.policy_sum)
+    def copy(self, copy_t=False):
+        if copy_t:
+            return self.__class__(self.regrets, self.policy_sum, self.t)
+        else:
+            return self.__class__(self.regrets, self.policy_sum)
 
     def cur(self):
         return rm_policy(self.regrets)
