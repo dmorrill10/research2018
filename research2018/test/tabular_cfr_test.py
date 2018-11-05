@@ -1,7 +1,6 @@
 import tensorflow as tf
 tf.enable_eager_execution()
-import numpy as np
-from research2018.tabular_cfr import TabularCfr
+from research2018.tabular_cfr import TabularCfr, TabularCfrCurrent
 
 
 class TabularCfrTest(tf.test.TestCase):
@@ -26,7 +25,7 @@ class TabularCfrTest(tf.test.TestCase):
         num_info_sets = 2
         num_actions = 3
         patient = TabularCfr(
-            tf.random_normal([num_info_sets, num_actions]),
+            TabularCfrCurrent(tf.random_normal([num_info_sets, num_actions])),
             tf.zeros([num_info_sets, num_actions]))
 
         initial_cur = tf.constant([[0.50621, 0., 0.49379],

@@ -19,28 +19,26 @@ def exp_avg_next_policy_sum(policy_sum, _cur, t, alpha=0.9):
     return alpha * policy_sum + (1.0 - alpha) * _cur
 
 
-class TabularCfr(object):
+class TabularCfrCurrent(object):
     @classmethod
     def zeros(cls, num_info_sets, num_actions, *args, **kwargs):
-        return cls(
-            tf.zeros([num_info_sets, num_actions]),
-            tf.zeros([num_info_sets, num_actions]), *args, **kwargs)
+        return cls(tf.zeros([num_info_sets, num_actions]), *args, **kwargs)
 
     @classmethod
     def load(cls, name):
         return cls(*np.load('{}.npy'.format(name)))
 
-    def __init__(self, regrets, policy_sum, t=0):
+    def __init__(self, regrets):
         self.regrets = ResourceVariable(regrets)
-        self.policy_sum = ResourceVariable(policy_sum)
-        self.t = ResourceVariable(t)
+        self._has_updated = False
+        self._policy = rm_policy(self.regrets)
 
     def save(self, name):
-        np.save(name, [self.regrets, self.policy_sum, self.t])
+        np.save(name, self.regrets)
         return self
 
     def graph_save(self, name, sess):
-        np.save(name, sess.run([self.regrets, self.policy_sum, self.t]))
+        np.save(name, sess.run(self.regrets))
         return self
 
     def num_info_sets(self):
@@ -50,18 +48,81 @@ class TabularCfr(object):
         return tf.shape(self.regrets)[1]
 
     def clear(self):
-        for v in [self.regrets, self.policy_sum]:
-            v.assign(tf.zeros_like(v))
+        self.regrets.assign(tf.zeros_like(self.regrets))
+
+    def copy(self):
+        return self.__class__(self.regrets)
+
+    def policy(self):
+        if tf.executing_eagerly() and self._has_updated:
+            self._policy = rm_policy(self.regrets)
+            self._has_updated = False
+        return self._policy
+
+    def update(self, env, **kwargs):
+        return self.update_with_cfv(env(self.policy()), **kwargs)
+
+    def update_with_cfv(self, cfv, rm_plus=False):
+        evs = utility(self.policy(), cfv)
+        regrets = cfv - evs
+
+        r = self.regrets + regrets
+        if rm_plus:
+            r = tf.nn.relu(r)
+        self._has_updated = True
+        return evs, self.regrets.assign(r)
+
+
+class TabularCfr(object):
+    @classmethod
+    def zeros(cls, num_info_sets, num_actions, *args, **kwargs):
+        return cls(
+            TabularCfrCurrent.zeros(num_info_sets, num_actions),
+            tf.zeros([num_info_sets, num_actions]), *args, **kwargs)
+
+    @classmethod
+    def load(cls, name):
+        return cls(
+            TabularCfrCurrent.load('{}.cur'.format(name)),
+            *np.load('{}.npy'.format(name)))
+
+    def __init__(self, cur, policy_sum, t=0):
+        self._cur = cur
+        self.policy_sum = ResourceVariable(policy_sum)
+        self.t = ResourceVariable(t)
+
+    def save(self, name):
+        self._cur.save('{}.cur'.format(name))
+        np.save(name, [self.policy_sum, self.t])
+        return self
+
+    def graph_save(self, name, sess):
+        self._cur.graph_save('{}.cur'.format(name))
+        np.save(name, sess.run([self.policy_sum, self.t]))
+        return self
+
+    @property
+    def num_info_sets(self):
+        return self._cur.num_info_sets
+
+    @property
+    def num_actions(self):
+        return self._cur.num_actions
+
+    def clear(self):
+        self._cur.clear()
+        self.policy_sum.assign(tf.zeros_like(self.policy_sum))
         self.t.assign(0)
 
     def copy(self, copy_t=False):
         if copy_t:
-            return self.__class__(self.regrets, self.policy_sum, self.t)
+            return self.__class__(self._cur.copy(), self.policy_sum, self.t)
         else:
-            return self.__class__(self.regrets, self.policy_sum)
+            return self.__class__(self._cur.copy(), self.policy_sum)
 
+    @property
     def cur(self):
-        return rm_policy(self.regrets)
+        return self._cur.policy
 
     def avg(self):
         return normalized(self.policy_sum, axis=1)
@@ -88,26 +149,17 @@ class TabularCfr(object):
             avg = self.avg()
             policy = policy + mix_avg * avg
 
-        cfv = env(policy)
-
-        evs = utility(cur, cfv)
-        regrets = cfv - evs
-
+        evs, update_current = self._cur.update_with_cfv(
+            env(policy), rm_plus=rm_plus)
         update_t = self.t.assign_add(1)
-        if rm_plus:
-            if next_policy_sum is None:
-                next_policy_sum = linear_avg_next_policy_sum
-            update_regrets = self.regrets.assign(
-                tf.nn.relu(self.regrets + regrets))
-        else:
-            if next_policy_sum is None:
-                next_policy_sum = uniform_avg_next_policy_sum
-            update_regrets = self.regrets.assign_add(regrets)
+
+        if next_policy_sum is None:
+            next_policy_sum = linear_avg_next_policy_sum if rm_plus else uniform_avg_next_policy_sum
 
         update_policy_sum = self.policy_sum.assign(
             next_policy_sum(self.policy_sum, cur,
                             tf.cast(self.t + 1, tf.float32)))
-        return evs, tf.group(update_policy_sum, update_regrets, update_t)
+        return evs, tf.group(update_policy_sum, update_current, update_t)
 
 
 class FixedParameterCfr(object):
@@ -116,7 +168,7 @@ class FixedParameterCfr(object):
         return cls(*np.load('{}.params.npy'.format(name)),
                    cfr_cls.load('{}.cfr'.format(name)))
 
-    def __init__(self, use_plus, mix_avg, cfr):
+    def __init__(self, cfr, use_plus=False, mix_avg=None):
         self.cfr = cfr
         self.use_plus = use_plus
         self.mix_avg = mix_avg
@@ -135,14 +187,15 @@ class FixedParameterCfr(object):
         return self
 
     def next_policy_sum(self):
-        raise NotImplementedError('Please override')
+        return None
 
     def update(self, env):
-        return self.cfr.update(
-            env,
-            rm_plus=self.use_plus,
-            mix_avg=self.mix_avg,
-            next_policy_sum=self.next_policy_sum())
+        kwargs = {'rm_plus': self.use_plus}
+        if self.mix_avg is not None:
+            kwargs['mix_avg'] = self.mix_avg
+        if self.next_policy_sum() is not None:
+            kwargs['next_policy_sum'] = self.next_policy_sum()
+        return self.cfr.update(env, **kwargs)
 
 
 class FixedParameterAvgCodeCfr(FixedParameterCfr):
