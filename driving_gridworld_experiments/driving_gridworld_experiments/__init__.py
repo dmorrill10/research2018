@@ -4,7 +4,10 @@ from driving_gridworld.road import Road
 from driving_gridworld.car import Car
 from driving_gridworld.obstacles import Bump, Pedestrian
 from driving_gridworld.gridworld import DrivingGridworld
-from driving_gridworld.rewards import SituationalReward
+from driving_gridworld.rewards import \
+    DebrisPerceptionReward, \
+    fixed_ditch_bonus, \
+    critical_reward_for_fixed_ditch_bonus
 
 from tf_kofn_robust_policy_optimization.discounted_mdp import \
     state_successor_policy_evaluation_op, \
@@ -18,7 +21,7 @@ from research2018.tabular_cfr import TabularCfr
 from research2018.kofn import KofnCfr
 
 
-def new_road(headlight_range=3):
+def new_road(headlight_range=2):
     return Road(
         headlight_range,
         Car(2, 0),
@@ -34,7 +37,7 @@ def safety_info(root_probs,
                 transitions,
                 sa_safety_info,
                 policy,
-                discount=1.0,
+                discount=0.99,
                 normalize=True):
     '''Assumes the first dimension is a batch dimension.'''
     state_safety_info = dual_state_value_policy_evaluation_op(
@@ -157,47 +160,37 @@ class UrdcKofnTabularCfr(KofnCfr):
                 self.policy())
 
 
-def tabular_road(headlight_range=3,
+def tabular_road(headlight_range=2,
                  num_samples_per_cfr_iter=10,
                  n=100,
-                 random_meta_mean=None,
-                 use_slow_collision_as_offroad_base=True,
+                 loc=0,
+                 precision=None,
                  discount=0.99,
+                 progress_bonus=1.0,
                  print_every=100):
     speed_limit = new_road(headlight_range=headlight_range).speed_limit()
     game = DrivingGridworld(lambda: new_road(headlight_range=headlight_range))
     num_reward_functions = n * num_samples_per_cfr_iter
-    z = speed_limit * (
-        speed_limit + int(use_slow_collision_as_offroad_base) + 1)
 
-    if random_meta_mean is None:
-        bcr = tf.fill([num_reward_functions], (1.0 - discount) / z)
-        wc_ncer = -bcr
-        cer = -tf.ones([num_reward_functions])
-    else:
-        bcr = tf.distributions.Exponential(random_meta_mean).sample(
-            num_reward_functions)
-        wc_ncer = -tf.distributions.Exponential(random_meta_mean).sample(
-            num_reward_functions)
-        cer = (z / (1.0 - discount)) * wc_ncer
-
-    random_reward_function = SituationalReward(
+    random_reward_function = DebrisPerceptionReward(
         stopping_reward=tf.zeros([num_reward_functions]),
-        wc_non_critical_error_reward=wc_ncer,
-        bc_unobstructed_progress_reward=bcr,
+        wc_non_critical_error_reward=tf.fill([num_reward_functions],
+                                             fixed_ditch_bonus(
+                                                 1, progress_bonus)),
+        bc_unobstructed_progress_reward=tf.fill([num_reward_functions],
+                                                progress_bonus),
         num_samples=num_reward_functions,
-        critical_error_reward=cer,
-        use_slow_collision_as_offroad_base=use_slow_collision_as_offroad_base)
+        critical_error_reward=critical_reward_for_fixed_ditch_bonus(
+            speed_limit, progress_bonus, discount),
+        use_slow_collision_as_offroad_base=False,
+        loc=loc,
+        precision=precision)
 
     transitions, rfd_list, state_indices = game.road.tabulate(
         random_reward_function, print_every=print_every)
 
     transitions = tf.stack(transitions)
     reward_dataset = tf.stack(rfd_list)
-    if random_meta_mean is not None:
-        reward_dataset = (
-            reward_dataset / -tf.reshape(cer, [1, 1, num_reward_functions]))
-
     root_probs = tf.one_hot(
         state_indices[game.road.copy().to_key()], depth=len(state_indices))
     return (root_probs, transitions, tf.transpose(reward_dataset, [2, 0, 1]),
