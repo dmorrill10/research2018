@@ -180,8 +180,10 @@ def tabular_road(headlight_range=2,
         bc_unobstructed_progress_reward=tf.fill([num_reward_functions],
                                                 progress_bonus),
         num_samples=num_reward_functions,
-        critical_error_reward=critical_reward_for_fixed_ditch_bonus(
-            speed_limit, progress_bonus, discount),
+        critical_error_reward=tf.fill([num_reward_functions],
+                                      critical_reward_for_fixed_ditch_bonus(
+                                          speed_limit, progress_bonus,
+                                          discount)),
         use_slow_collision_as_offroad_base=False,
         loc=loc,
         precision=precision)
