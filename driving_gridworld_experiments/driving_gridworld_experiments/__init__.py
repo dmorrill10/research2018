@@ -76,70 +76,64 @@ class UrdcKofnTabularCfr(KofnCfr):
         return cls(cfr=cfr_cls.zeros(num_states, num_actions), **kwargs)
 
     @classmethod
-    def train_env(cls,
-                  root_probs,
-                  transitions,
-                  reward_dataset,
-                  discount,
-                  n,
-                  kofn_opponent,
-                  num_samples=1):
+    def train_env(cls, root_probs, transitions, reward_dataset, discount,
+                  kofn_opponent):
+        num_samples = reward_dataset.shape[0].value
+        n = reward_dataset.shape[1].value
+        transitions = tf.convert_to_tensor(transitions)
+        num_states = transitions.shape[0].value
+        num_actions = transitions.shape[1].value
+        r = tf.resahpe(reward_dataset,
+                       [num_samples * n, num_states, num_actions])
+
         def env(policy):
-            '''world X state'''
+            '''sample * world X state'''
             v = dual_state_value_policy_evaluation_op(
-                transitions, policy, reward_dataset, gamma=discount)
-            '''state X action X world'''
-            q = tf.transpose(
-                reward_dataset +
-                discount * tf.tensordot(v, transitions, axes=[-1, -1]),
-                [1, 2, 0])
-            v = tf.transpose(v)
+                transitions, policy, r, gamma=discount)
+            q = tf.reshape(
+                r + discount * tf.tensordot(v, transitions, axes=[-1, -1]),
+                [num_samples, n, num_states, num_actions])
+            '''sample X state X action X world'''
+            q = tf.transpose(q, [0, 2, 3, 1])
+            v = tf.transpose(
+                tf.reshape(v, [num_samples, n, num_states]), [0, 2, 1])
 
-            offset = 0
-            kofn_q = []
-            for sample_idx in range(num_samples):
-                next_offset = n * (sample_idx + 1)
-                sample_v = v[:, offset:next_offset]
-                sample_q = q[:, :, offset:next_offset]
-
-                kofn_evs_and_weights = KofnEvsAndWeights(
-                    sample_v, kofn_opponent, context_weights=root_probs)
-
-                kofn_q.append(
-                    kofn_action_values(sample_q,
-                                       kofn_evs_and_weights.world_weights))
-
-                offset = next_offset
+            kofn_q = [
+                kofn_action_values(
+                    q[sample_idx],
+                    KofnEvsAndWeights(
+                        v[sample_idx],
+                        kofn_opponent,
+                        context_weights=root_probs).world_weights)
+                for sample_idx in range(num_samples)
+            ]
             return tf.reduce_mean(tf.stack(kofn_q, -1), axis=-1)
 
         return env
 
     @classmethod
-    def test_env(cls,
-                 root_probs,
-                 transitions,
-                 reward_dataset,
-                 discount,
-                 n,
-                 kofn_opponent,
-                 num_samples=1):
+    def test_env(cls, root_probs, transitions, reward_dataset, discount,
+                 kofn_opponent):
+        num_samples = reward_dataset.shape[0].value
+        n = reward_dataset.shape[1].value
+        transitions = tf.convert_to_tensor(transitions)
+        num_states = transitions.shape[0].value
+        num_actions = transitions.shape[1].value
+        r = tf.resahpe(reward_dataset,
+                       [num_samples * n, num_states, num_actions])
+
         def env(policy):
-            '''world X state'''
+            '''sample * world X state'''
             v = dual_state_value_policy_evaluation_op(
-                transitions, policy, reward_dataset, gamma=discount)
-            v = tf.transpose(v)
-            offset = 0
-            kofn_ev = []
-            for sample_idx in range(num_samples):
-                next_offset = n * (sample_idx + 1)
-
-                kofn_ev.append(
-                    KofnEvsAndWeights(
-                        v[:, offset:next_offset],
-                        kofn_opponent,
-                        context_weights=root_probs).ev)
-
-                offset = next_offset
+                transitions, policy, r, gamma=discount)
+            v = tf.transpose(
+                tf.reshape(v, [num_samples, n, num_states]), [0, 2, 1])
+            kofn_ev = [
+                KofnEvsAndWeights(
+                    v[sample_idx], kofn_opponent,
+                    context_weights=root_probs).ev
+                for sample_idx in range(num_samples)
+            ]
             return tf.reduce_mean(tf.stack(kofn_ev, -1), axis=-1)
 
         return env
@@ -203,7 +197,13 @@ class TabularRoad(object):
             transitions, rfd_list, state_indices = game.road.tabulate(
                 random_reward_function, print_every=print_every)
 
-            reward_datasets.append(tf.transpose(tf.stack(rfd_list), [2, 0, 1]))
+            reward_datasets.append(
+                tf.reshape(
+                    tf.transpose(tf.stack(rfd_list), [2, 0, 1]), [
+                        num_samples_per_cfr_iter, n,
+                        len(state_indices),
+                        len(rfd_list[0])
+                    ]))
 
         transitions = tf.stack(transitions)
         root_probs = tf.one_hot(
@@ -221,6 +221,14 @@ class TabularRoad(object):
         self.reward_dataset = tf.convert_to_tensor(reward_dataset)
         self.state_indices = state_indices
         self.discount = discount
+
+    @property
+    def num_reps(self):
+        return self.reward_dataset.shape[0].value
+
+    @property
+    def num_worlds(self):
+        return self.reward_dataset.shape[1].value
 
     @property
     def num_states(self):
