@@ -26,8 +26,8 @@ def new_road(headlight_range=2):
         headlight_range,
         Car(2, 0),
         obstacles=[
-            Bump(-1, -1, prob_of_appearing=1 - 0.5**(1 / 4.0)),
-            Pedestrian(-1, -1, speed=1, prob_of_appearing=1 - 0.5**(1 / 5.0))
+            Bump(-1, -1, prob_of_appearing=0.1),
+            Pedestrian(-1, -1, speed=1, prob_of_appearing=0.1)
         ],
         allowed_obstacle_appearance_columns=[{2}, {1}],
         allow_crashing=True)
