@@ -178,12 +178,6 @@ class TabularRoad(object):
         cer = critical_reward_for_fixed_ditch_bonus(progress_bonus,
                                                     speed_limit, discount)
 
-        if normalize_rewards:
-            cer_mag = abs(cer)
-            progress_bonus /= cer_mag
-            wc_ncer /= cer_mag
-            cer /= cer_mag
-
         tf.logging.info('progress_bonus: {}, wc_ncer: {}, cer: {}'.format(
             progress_bonus, wc_ncer, cer))
 
@@ -204,13 +198,15 @@ class TabularRoad(object):
             transitions, rfd_list, state_indices = game.road.tabulate(
                 random_reward_function, print_every=print_every)
 
-            reward_datasets.append(
-                tf.reshape(
-                    tf.transpose(tf.stack(rfd_list), [2, 0, 1]), [
-                        num_samples_per_cfr_iter, n,
-                        len(state_indices),
-                        len(rfd_list[0])
-                    ]))
+            r = tf.reshape(
+                tf.transpose(tf.stack(rfd_list), [2, 0, 1]), [
+                    num_samples_per_cfr_iter, n,
+                    len(state_indices),
+                    len(rfd_list[0])
+                ])
+            if normalize_rewards:
+                r = r / tf.reduce_max(tf.abs(r), axis=(2, 3), keepdims=True)
+            reward_datasets.append(r)
 
         transitions = tf.stack(transitions)
         root_probs = tf.one_hot(
