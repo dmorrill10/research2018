@@ -167,25 +167,29 @@ def tabular_road(headlight_range=2,
                  precisions=[None],
                  discount=0.99,
                  progress_bonus=1.0,
+                 ditch_bonus_multiplier=3,
                  print_every=100):
     speed_limit = new_road(headlight_range=headlight_range).speed_limit()
     game = DrivingGridworld(lambda: new_road(headlight_range=headlight_range))
     num_reward_functions = n * num_samples_per_cfr_iter
+    wc_ncer = fixed_ditch_bonus(
+        progress_bonus, multiplier=ditch_bonus_multiplier)
+    cer = critical_reward_for_fixed_ditch_bonus(progress_bonus, speed_limit,
+                                                discount)
+
+    tf.logging.info('progress_bonus: {}, wc_ncer: {}, cer: {}'.format(
+        progress_bonus, wc_ncer, cer))
 
     reward_datasets = []
     for precision in precisions:
         random_reward_function = DebrisPerceptionReward(
             stopping_reward=tf.zeros([num_reward_functions]),
             wc_non_critical_error_reward=tf.fill([num_reward_functions],
-                                                 fixed_ditch_bonus(
-                                                     1, progress_bonus)),
+                                                 wc_ncer),
             bc_unobstructed_progress_reward=tf.fill([num_reward_functions],
                                                     progress_bonus),
             num_samples=num_reward_functions,
-            critical_error_reward=tf.fill(
-                [num_reward_functions],
-                critical_reward_for_fixed_ditch_bonus(
-                    speed_limit, progress_bonus, discount)),
+            critical_error_reward=tf.fill([num_reward_functions], cer),
             use_slow_collision_as_offroad_base=False,
             loc=loc,
             precision=precision)
