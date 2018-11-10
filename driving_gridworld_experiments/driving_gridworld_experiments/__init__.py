@@ -167,6 +167,7 @@ class TabularRoad(object):
                  discount=0.99,
                  progress_bonus=1.0,
                  ditch_bonus_multiplier=3,
+                 normalize_rewards=True,
                  print_every=100):
         speed_limit = new_road(headlight_range=headlight_range).speed_limit()
         game = DrivingGridworld(
@@ -176,6 +177,12 @@ class TabularRoad(object):
             progress_bonus, multiplier=ditch_bonus_multiplier)
         cer = critical_reward_for_fixed_ditch_bonus(progress_bonus,
                                                     speed_limit, discount)
+
+        if normalize_rewards:
+            cer_mag = abs(cer)
+            progress_bonus /= cer_mag
+            wc_ncer /= cer_mag
+            cer /= cer_mag
 
         tf.logging.info('progress_bonus: {}, wc_ncer: {}, cer: {}'.format(
             progress_bonus, wc_ncer, cer))
