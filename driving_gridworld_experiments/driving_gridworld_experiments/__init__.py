@@ -83,7 +83,7 @@ class UrdcKofnTabularCfr(KofnCfr):
         transitions = tf.convert_to_tensor(transitions)
         num_states = transitions.shape[0].value
         num_actions = transitions.shape[1].value
-        r = tf.resahpe(reward_dataset,
+        r = tf.reshape(reward_dataset,
                        [num_samples * n, num_states, num_actions])
 
         def env(policy):
@@ -119,7 +119,7 @@ class UrdcKofnTabularCfr(KofnCfr):
         transitions = tf.convert_to_tensor(transitions)
         num_states = transitions.shape[0].value
         num_actions = transitions.shape[1].value
-        r = tf.resahpe(reward_dataset,
+        r = tf.reshape(reward_dataset,
                        [num_samples * n, num_states, num_actions])
 
         def env(policy):
