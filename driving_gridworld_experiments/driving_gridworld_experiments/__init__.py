@@ -121,7 +121,8 @@ class UrdcKofnTabularCfr(KofnCfr):
                         context_weights=root_probs).world_weights)
                 for sample_idx in range(num_samples)
             ]
-            return tf.reduce_mean(tf.stack(kofn_q, -1), axis=-1)
+            return (1 - discount) * tf.reduce_mean(
+                tf.stack(kofn_q, -1), axis=-1)
 
         return env
 
@@ -148,7 +149,8 @@ class UrdcKofnTabularCfr(KofnCfr):
                     context_weights=root_probs).ev
                 for sample_idx in range(num_samples)
             ]
-            return tf.reduce_mean(tf.stack(kofn_ev, -1), axis=-1)
+            return (1 - discount) * tf.reduce_mean(
+                tf.stack(kofn_ev, -1), axis=-1)
 
         return env
 
@@ -180,8 +182,9 @@ class TabularRoad(object):
                  precisions=[None],
                  discount=0.99,
                  progress_bonus=1.0,
-                 ditch_bonus_multiplier=10,
-                 normalize_rewards=True,
+                 ditch_bonus_multiplier=10.0,
+                 normalize_rewards=False,
+                 critical_error_reward=-1000.0,
                  print_every=100):
         speed_limit = new_road(headlight_range=headlight_range).speed_limit()
         game = DrivingGridworld(
@@ -189,11 +192,13 @@ class TabularRoad(object):
         num_reward_functions = n * num_samples_per_cfr_iter
         wc_ncer = fixed_ditch_bonus(
             progress_bonus, multiplier=ditch_bonus_multiplier)
-        cer = critical_reward_for_fixed_ditch_bonus(progress_bonus,
-                                                    speed_limit, discount)
+
+        if critical_error_reward is None:
+            critical_error_reward = critical_reward_for_fixed_ditch_bonus(
+                progress_bonus, speed_limit, discount)
 
         tf.logging.info('progress_bonus: {}, wc_ncer: {}, cer: {}'.format(
-            progress_bonus, wc_ncer, cer))
+            progress_bonus, wc_ncer, critical_error_reward))
 
         reward_datasets = []
         for precision in precisions:
@@ -204,7 +209,8 @@ class TabularRoad(object):
                 bc_unobstructed_progress_reward=tf.fill([num_reward_functions],
                                                         progress_bonus),
                 num_samples=num_reward_functions,
-                critical_error_reward=tf.fill([num_reward_functions], cer),
+                critical_error_reward=tf.fill([num_reward_functions],
+                                              critical_error_reward),
                 use_slow_collision_as_offroad_base=False,
                 loc=loc,
                 precision=precision)
