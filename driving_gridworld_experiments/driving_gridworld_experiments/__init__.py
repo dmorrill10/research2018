@@ -1,4 +1,5 @@
 import tensorflow as tf
+import numpy as np
 
 from driving_gridworld.road import Road
 from driving_gridworld.car import Car
@@ -16,11 +17,24 @@ from tf_kofn_robust_policy_optimization.discounted_mdp import \
 from tf_kofn_robust_policy_optimization.robust.kofn import \
     KofnEvsAndWeights, \
     kofn_action_values
+from tf_kofn_robust_policy_optimization.robust import \
+    deterministic_kofn_weights
 
-from research2018.tabular_cfr import TabularCfr
+from research2018.tabular_cfr import TabularCfrCurrent
 from research2018.kofn import KofnCfr
+from research2018.fixed_parameter_cfr import FixedParameterCfr
+from research2018.online_learner import OnlineLearner
 
 from robust_offline_contextual_bandits import cache
+from robust_offline_contextual_bandits.data import load_list
+from robust_offline_contextual_bandits.plotting import \
+    tableu20_color_table, \
+    line_style_table
+from robust_offline_contextual_bandits.tf_np import reset_random
+
+import matplotlib.pyplot as plt
+
+from simple_pytimer import AccumulatingTimer, Timer
 
 
 def new_road(headlight_range=2):
@@ -71,7 +85,7 @@ class UrdcKofnTabularCfr(KofnCfr):
     def from_num_states_and_actions(cls,
                                     num_states,
                                     num_actions,
-                                    cfr_cls=TabularCfr,
+                                    cfr_cls=TabularCfrCurrent,
                                     **kwargs):
         return cls(cfr=cfr_cls.zeros(num_states, num_actions), **kwargs)
 
@@ -166,8 +180,8 @@ class TabularRoad(object):
                  precisions=[None],
                  discount=0.99,
                  progress_bonus=1.0,
-                 ditch_bonus_multiplier=3,
-                 normalize_rewards=True,
+                 ditch_bonus_multiplier=10,
+                 normalize_rewards=False,
                  print_every=100):
         speed_limit = new_road(headlight_range=headlight_range).speed_limit()
         game = DrivingGridworld(
@@ -270,3 +284,265 @@ class TabularRoad(object):
                     tf.float32)).eval()
         assert num_terminal_states == 1
         return discount
+
+
+class DgKofnTabularCfr(UrdcKofnTabularCfr, FixedParameterCfr):
+    pass
+
+
+class DgKofnTrainingResults(object):
+    def __init__(self, reality_idx):
+        self.reality_idx = reality_idx
+
+    @load_list
+    def load_learners(self, ks):
+        self.learners = [
+            DgKofnTabularCfr.load(
+                'learner.{}.{}'.format(self.reality_idx, i),
+                cfr_cls=TabularCfrCurrent) for i in range(len(ks))
+        ]
+        for learner in self.learners:
+            tf.get_default_session().run(learner.cfr.regrets.initializer)
+        return self
+
+    def load_eot(self):
+        self.eot = np.load('eot.{}.npy'.format(self.reality_idx))
+        return self
+
+    def load_ckpts(self):
+        self.ckpts = np.load('ckpts.{}.npy'.format(self.reality_idx))
+        return self
+
+    def load(self, ks):
+        self.load_learners(ks)
+        self.load_eot()
+        self.load_ckpts()
+        return self
+
+    def assign(self, learners, eot, ckpts):
+        self.learners = learners
+        self.eot = eot
+        self.ckpts = ckpts
+        return self
+
+    def save_learners(self):
+        for i, learner in enumerate(self.learners):
+            learner.graph_save('learner.{}.{}'.format(self.reality_idx, i),
+                               tf.get_default_session())
+        return self
+
+    def save_eot(self):
+        np.save('eot.{}'.format(self.reality_idx), self.eot)
+        return self
+
+    def save_ckpts(self):
+        np.save('ckpts.{}'.format(self.reality_idx), self.ckpts)
+        return self
+
+    def save(self):
+        self.save_learners()
+        self.save_eot()
+        self.save_ckpts()
+        return self
+
+
+class DgRealityExperiment(object):
+    def __init__(self, reality_idx, road, n, ks):
+        self.reality_idx = reality_idx
+        self.road = road
+        self.training_results = DgKofnTrainingResults(self.reality_idx)
+        self.n = n
+        self.ks = ks
+
+    @cache
+    def kofn_opponents(self):
+        return [deterministic_kofn_weights(k, self.n) for k in self.ks]
+
+    @property
+    def discount_vector(self):
+        return self.road.discount_vector
+
+    @property
+    def learners(self):
+        return self.training_results.learners
+
+    @property
+    def eot_np(self):
+        return self.training_results.eot
+
+    @property
+    def checkpoint_iterations(self):
+        return self.training_results.ckpts
+
+    @property
+    def root_probs(self):
+        return self.road.root_probs
+
+    @property
+    def transitions(self):
+        return self.road.transitions
+
+    @property
+    def sa_safety_info(self):
+        return self.road.sa_safety_info
+
+    @property
+    def num_states(self):
+        return self.road.num_states
+
+    @property
+    def num_actions(self):
+        return self.road.num_actions
+
+    @property
+    def num_state_actions(self):
+        return self.road.num_state_actions
+
+    @property
+    def avg_crashes(self):
+        crashes = self.safety_info[:, 0]
+        assert np.all(crashes == 0)
+        return crashes
+
+    @property
+    def avg_collisions(self):
+        collisions = self.safety_info[:, 1]
+        assert np.all(collisions == 0)
+        return collisions
+
+    @property
+    def avg_debris(self):
+        debris = self.safety_info[:, 2] / 0.5
+        assert 0 <= max(debris) < 1
+        return debris
+
+    @property
+    def avg_ditch(self):
+        ditch = self.safety_info[:, 3] / 0.5
+        assert 0 <= max(ditch) <= 1
+        return ditch
+
+    @property
+    def avg_speeds(self):
+        return self.safety_info[:, 4]
+
+    @property
+    def avg_progress(self):
+        return self.safety_info[:, 5]
+
+    @property
+    def avg_lane_changes(self):
+        return self.safety_info[:, 6]
+
+    @property
+    def avg_unsafe(self):
+        unsafe = (self.avg_debris + self.avg_ditch) / 2.0
+        assert max(unsafe) <= 1
+        return unsafe
+
+    @property
+    def reward_dataset(self):
+        return self.road.reward_dataset
+
+    @cache
+    def safety_info(self):
+        return tf.convert_to_tensor([
+            safety_info(
+                self.root_probs,
+                self.transitions,
+                self.sa_safety_info,
+                learner.policy(),
+                self.discount_vector,
+                normalize=True) for learner in self.learners
+        ]).eval()
+
+    def train_learners(self,
+                       num_iterations=5000,
+                       use_plus=True,
+                       print_every=10):
+        eot = []
+        checkpoint_iterations = []
+
+        reset_random()
+
+        timer = Timer('create learners')
+
+        with timer:
+            learners = [
+                OnlineLearner(
+                    DgKofnTabularCfr.from_num_states_and_actions(
+                        self.num_states,
+                        self.num_actions,
+                        opponent=opponent,
+                        use_plus=use_plus,
+                        cfr_cls=TabularCfrCurrent),
+                    DgKofnTabularCfr.train_env(
+                        self.root_probs, self.transitions, self.reward_dataset,
+                        self.discount_vector, opponent))
+                for opponent in self.kofn_opponents
+            ]
+        print(timer)
+
+        timer = Timer('create EV and update nodes')
+        with timer:
+            updates = []
+            evs = []
+            init = []
+            for learner in learners:
+                my_ev, my_update = learner.update()
+                evs.append(tf.einsum('s,sa->', self.root_probs, my_ev))
+                updates.append(my_update)
+                init.append(learner.learner.cfr.regrets.initializer)
+        print(timer)
+
+        timer = Timer('init')
+        with timer:
+            tf.get_default_session().run(init)
+        print(timer)
+
+        timer = AccumulatingTimer('training')
+
+        for t in range(1, num_iterations + 1):
+            with timer:
+                evs_np = tf.get_default_session().run([evs, updates])[0]
+                eot.append(evs_np)
+                checkpoint_iterations.append(t)
+                if t == 1 or t % print_every == 0:
+                    print('{}: {}'.format(t, evs_np))
+                    print('{}: {}'.format(t, str(timer)))
+        return [l.learner
+                for l in learners], np.array(eot), checkpoint_iterations
+
+    def train_and_save(self,
+                       use_plus=True,
+                       num_iterations=5000,
+                       print_every=10):
+        try:
+            self.training_results.load(self.ks)
+        except:
+            self.training_results.assign(*self.train_learners(
+                num_iterations=num_iterations,
+                use_plus=use_plus,
+                print_every=print_every)).save()
+        return self
+
+    def plot_convergence(self):
+        colors = tableu20_color_table()
+        colors = [next(colors) for _ in self.learners]
+
+        line_styles = line_style_table()
+        line_styles = [next(line_styles) for _ in self.learners]
+
+        fig, ax = plt.subplots(1, 1)
+        fig.set_size_inches((10, 5))
+        for ki, k in enumerate(self.ks):
+            ax.plot(
+                self.checkpoint_iterations,
+                self.eot_np[:, ki],
+                label='{}-of-{}'.format(k, self.n),
+                color=colors[ki],
+                ls=line_styles[ki])
+        ax.set_xlabel('iteration')
+        ax.set_ylabel('EV')
+        plt.legend()
+        return fig, ax
