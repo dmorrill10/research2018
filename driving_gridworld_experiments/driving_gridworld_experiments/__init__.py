@@ -347,12 +347,15 @@ class DgKofnTrainingResults(object):
 
 
 class DgRealityExperiment(object):
-    def __init__(self, reality_idx, road, n, ks):
+    def __init__(self, reality_idx, road, ks):
         self.reality_idx = reality_idx
         self.road = road
         self.training_results = DgKofnTrainingResults(self.reality_idx)
-        self.n = n
         self.ks = ks
+
+    @property
+    def n(self):
+        return self.road.num_worlds
 
     @cache
     def kofn_opponents(self):
