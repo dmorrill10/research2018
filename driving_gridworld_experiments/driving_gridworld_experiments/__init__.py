@@ -181,7 +181,7 @@ class TabularRoad(object):
                  discount=0.99,
                  progress_bonus=1.0,
                  ditch_bonus_multiplier=10,
-                 normalize_rewards=False,
+                 normalize_rewards=True,
                  print_every=100):
         speed_limit = new_road(headlight_range=headlight_range).speed_limit()
         game = DrivingGridworld(
