@@ -454,26 +454,21 @@ class DgRealityExperiment(object):
     def reward_dataset(self):
         return self.road.reward_dataset
 
+    def policy_safety_info(self, policy):
+        return safety_info(
+            self.root_probs,
+            self.transitions,
+            self.sa_safety_info,
+            policy,
+            self.discount_vector,
+            normalize=True)
+
     @cache
-    def safety_info(self, policy=None):
-        if policy is None:
-            return tf.convert_to_tensor([
-                safety_info(
-                    self.root_probs,
-                    self.transitions,
-                    self.sa_safety_info,
-                    learner.policy(),
-                    self.discount_vector,
-                    normalize=True) for learner in self.learners
-            ]).eval()
-        else:
-            return safety_info(
-                self.root_probs,
-                self.transitions,
-                self.sa_safety_info,
-                policy,
-                self.discount_vector,
-                normalize=True).eval()
+    def safety_info(self):
+        return tf.convert_to_tensor([
+            self.policy_safety_info(learner.policy())
+            for learner in self.learners
+        ]).eval()
 
     def train_learners(self,
                        num_iterations=5000,
