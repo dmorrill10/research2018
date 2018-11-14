@@ -310,15 +310,15 @@ class DgKofnTrainingResults(object):
         ]
         for learner in self.learners:
             tf.get_default_session().run(learner.cfr.regrets.initializer)
-        return self
+        return self.learners
 
     def load_eot(self):
         self.eot = np.load('eot.{}.npy'.format(self.reality_idx))
-        return self
+        return self.eot
 
     def load_ckpts(self):
         self.ckpts = np.load('ckpts.{}.npy'.format(self.reality_idx))
-        return self
+        return self.ckpts
 
     def load(self, ks):
         self.load_learners(ks)
