@@ -13,7 +13,8 @@ from driving_gridworld.rewards import \
 from tf_kofn_robust_policy_optimization.discounted_mdp import \
     state_successor_policy_evaluation_op, \
     dual_state_value_policy_evaluation_op, \
-    state_distribution
+    state_distribution, \
+    generalized_policy_iteration_op
 from tf_kofn_robust_policy_optimization.robust.kofn import \
     KofnEvsAndWeights, \
     kofn_action_values
@@ -555,3 +556,10 @@ class DgRealityExperiment(object):
         ax.set_ylabel('EV')
         plt.legend()
         return fig, ax
+
+    def random_opt_policy(self, **kwargs):
+        return generalized_policy_iteration_op(
+            self.transitions,
+            self.reward_dataset[0],
+            gamma=self.discount_vector,
+            **kwargs)
