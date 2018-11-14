@@ -569,6 +569,6 @@ class DgRealityExperiment(object):
     def random_opt_policy(self, **kwargs):
         return generalized_policy_iteration_op(
             self.transitions,
-            self.reward_dataset[0],
+            self.reward_dataset[0, 0],
             gamma=self.discount_vector,
             **kwargs)
