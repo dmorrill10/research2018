@@ -96,8 +96,10 @@ class NoisyDense(tf.keras.layers.Layer):
 
     def sample(self):
         return FixedDense(
-            self.kernel(lambda shape: np.random.normal(size=shape)),
-            self.bias(lambda shape: np.random.normal(size=shape)))
+            self.kernel(
+                lambda shape: np.random.normal(size=shape).astype('float32')),
+            self.bias(
+                lambda shape: np.random.normal(size=shape).astype('float32')))
 
     def entropy_cov_part(self):
         return sum([
