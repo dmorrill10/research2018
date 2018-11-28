@@ -101,7 +101,7 @@ class NoisyDense(tf.keras.layers.Layer):
 
     def entropy_cov_part(self):
         return sum([
-            tf.log(L.determinant())
+            L.log_abs_determinant()
             for L in [self.L_kernel(), self.L_bias()]
         ]) / 2.0
 
