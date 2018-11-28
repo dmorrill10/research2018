@@ -54,20 +54,25 @@ class NoisyDense(tf.keras.layers.Layer):
             initializer=self.mu_initializer,
             trainable=True)
 
+        def sigma_constraint(k):
+            k_diag = tf.diag_part(k)
+            k_diag = tf.where(
+                tf.equal(k_diag, 0.0), tf.fill(k_diag.shape, 1e-5), k_diag)
+            k = tf.linalg.set_diag(k, k_diag)
+            return k * tf.contrib.distributions.fill_triangular(
+                tf.ones([k.shape[0].value * (k.shape[1].value + 1) // 2]))
+
         self.sigma_kernel = self.add_weight(
             name='sigma_kernel',
             shape=tf.TensorShape((input_shape[1], input_shape[1])),
             initializer=self.sigma_initializer,
-            constraint=lambda k: k * tf.contrib.distributions.fill_triangular(
-                tf.ones(
-                    [input_shape[1] * (input_shape[1] + 1) // 2]
-                )
-            ),
+            constraint=sigma_constraint,
             trainable=True)
         self.sigma_bias = self.add_weight(
             name='sigma_bias',
             shape=tf.TensorShape((1, 1)),
             initializer=self.sigma_initializer,
+            constraint=sigma_constraint,
             trainable=True)
         return super(NoisyDense, self).build(input_shape)
 
