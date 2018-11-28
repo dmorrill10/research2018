@@ -1,0 +1,105 @@
+import tensorflow as tf
+import numpy as np
+
+
+class ResMixin(object):
+    def call(self, inputs):
+        return super().call(inputs) + inputs
+
+
+class FixedDense(tf.keras.layers.Layer):
+    def __init__(self, kernel, bias, **kwargs):
+        self.kernel = tf.convert_to_tensor(kernel)
+        self.bias = tf.convert_to_tensor(bias)
+        super(FixedDense, self).__init__(**kwargs)
+
+    def call(self, inputs):
+        return inputs @ self.kernel + self.bias
+
+    def compute_output_shape(self, input_shape):
+        shape = tf.TensorShape(input_shape).as_list()
+        shape[-1] = self.kernel.shape[-1].value
+        return tf.TensorShape(shape)
+
+
+def _determinant_from_cholesky(L):
+    return tf.square(tf.reduce_prod(tf.diag_part(L)))
+
+
+class NoisyDense(tf.keras.layers.Layer):
+    def __init__(
+            self,
+            output_dim,
+            mu_initializer='zeros',
+            sigma_initializer=(
+                lambda shape, *args, **kwargs: tf.eye(shape[0].value, shape[1].value)
+            ),
+            activation=tf.identity,
+            **kwargs):
+        self.output_dim = output_dim
+        self.mu_initializer = mu_initializer
+        self.sigma_initializer = sigma_initializer
+        self.activation = activation
+        super(NoisyDense, self).__init__(**kwargs)
+
+    def build(self, input_shape):
+        self.mu_kernel = self.add_weight(
+            name='mu_kernel',
+            shape=tf.TensorShape((input_shape[1], self.output_dim)),
+            initializer=self.mu_initializer,
+            trainable=True)
+        self.mu_bias = self.add_weight(
+            name='mu_bias',
+            shape=tf.TensorShape((1, self.output_dim)),
+            initializer=self.mu_initializer,
+            trainable=True)
+
+        self.sigma_kernel = self.add_weight(
+            name='sigma_kernel',
+            shape=tf.TensorShape((input_shape[1], input_shape[1])),
+            initializer=self.sigma_initializer,
+            constraint=lambda k: k * tf.contrib.distributions.fill_triangular(
+                tf.ones(
+                    [input_shape[1] * (input_shape[1] + 1) // 2]
+                )
+            ),
+            trainable=True)
+        self.sigma_bias = self.add_weight(
+            name='sigma_bias',
+            shape=tf.TensorShape((1, 1)),
+            initializer=self.sigma_initializer,
+            trainable=True)
+        return super(NoisyDense, self).build(input_shape)
+
+    def kernel(self,
+               standard_normal=lambda shape: tf.random_normal(shape=shape)):
+        return self.mu_kernel + self.sigma_kernel @ standard_normal(
+            self.mu_kernel.shape)
+
+    def bias(self,
+             standard_normal=lambda shape: tf.random_normal(shape=shape)):
+        return self.mu_bias + self.sigma_bias @ standard_normal(
+            self.mu_bias.shape)
+
+    def call(self, inputs):
+        return self.activation(inputs @ self.kernel() + self.bias())
+
+    def compute_output_shape(self, input_shape):
+        shape = tf.TensorShape(input_shape).as_list()
+        shape[-1] = self.output_dim
+        return tf.TensorShape(shape)
+
+    def sample(self):
+        return FixedDense(
+            self.kernel(lambda shape: np.random.normal(size=shape)),
+            self.bias(lambda shape: np.random.normal(size=shape)))
+
+    def entropy(self):
+        return sum([
+            tf.log(_determinant_from_cholesky(L))
+            for L in [self.sigma_kernel, self.sigma_bias]
+        ]) / 2.0
+
+
+class ResNoisyDense(ResMixin, NoisyDense):
+    pass
