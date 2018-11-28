@@ -22,10 +22,6 @@ class FixedDense(tf.keras.layers.Layer):
         return tf.TensorShape(shape)
 
 
-def _determinant_from_cholesky(L):
-    return tf.square(tf.reduce_prod(tf.diag_part(L)))
-
-
 class NoisyDense(tf.keras.layers.Layer):
     def __init__(
             self,
@@ -58,9 +54,7 @@ class NoisyDense(tf.keras.layers.Layer):
             k_diag = tf.diag_part(k)
             k_diag = tf.where(
                 tf.equal(k_diag, 0.0), tf.fill(k_diag.shape, 1e-5), k_diag)
-            k = tf.linalg.set_diag(k, k_diag)
-            return k * tf.contrib.distributions.fill_triangular(
-                tf.ones([k.shape[0].value * (k.shape[1].value + 1) // 2]))
+            return tf.linalg.set_diag(k, k_diag)
 
         self.sigma_kernel = self.add_weight(
             name='sigma_kernel',
@@ -76,15 +70,21 @@ class NoisyDense(tf.keras.layers.Layer):
             trainable=True)
         return super(NoisyDense, self).build(input_shape)
 
+    def L_kernel(self):
+        return tf.linalg.LinearOperatorLowerTriangular(self.sigma_kernel)
+
+    def L_bias(self):
+        return tf.linalg.LinearOperatorLowerTriangular(self.sigma_bias)
+
     def kernel(self,
                standard_normal=lambda shape: tf.random_normal(shape=shape)):
-        return self.mu_kernel + self.sigma_kernel @ standard_normal(
-            self.mu_kernel.shape)
+        return self.mu_kernel + self.L_kernel().matmul(
+            standard_normal(self.mu_kernel.shape))
 
     def bias(self,
              standard_normal=lambda shape: tf.random_normal(shape=shape)):
-        return self.mu_bias + self.sigma_bias @ standard_normal(
-            self.mu_bias.shape)
+        return self.mu_bias + self.L_bias().matmul(
+            standard_normal(self.mu_bias.shape))
 
     def call(self, inputs):
         return self.activation(inputs @ self.kernel() + self.bias())
@@ -99,10 +99,10 @@ class NoisyDense(tf.keras.layers.Layer):
             self.kernel(lambda shape: np.random.normal(size=shape)),
             self.bias(lambda shape: np.random.normal(size=shape)))
 
-    def entropy(self):
+    def entropy_cov_part(self):
         return sum([
-            tf.log(_determinant_from_cholesky(L))
-            for L in [self.sigma_kernel, self.sigma_bias]
+            tf.log(L.determinant())
+            for L in [self.L_kernel(), self.L_bias()]
         ]) / 2.0
 
 
