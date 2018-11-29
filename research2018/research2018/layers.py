@@ -55,19 +55,21 @@ class NoisyDense(tf.keras.layers.Layer):
             initializer='zeros',
             trainable=True)
 
-        # TODO: Shared cov
-
         self.sigma_kernel = self.add_weight(
             name='sigma_kernel',
-            shape=tf.TensorShape((input_shape[1], input_shape[1])),
+            shape=(self._L_batch_dim, input_shape[1], input_shape[1]),
             initializer=self.sigma_initializer,
             trainable=self.sigma_trainable)
         self.sigma_bias = self.add_weight(
             name='sigma_bias',
-            shape=tf.TensorShape((1, 1)),
+            shape=(self._L_batch_dim, 1, 1),
             initializer=self.sigma_initializer,
             trainable=self.sigma_trainable)
         return super(NoisyDense, self).build(input_shape)
+
+    @property
+    def _L_batch_dim(self):
+        return 1 if self.share_cov else self.output_dim
 
     def L_kernel(self):
         return tf.linalg.LinearOperatorLowerTriangular(self.sigma_kernel)
@@ -77,13 +79,21 @@ class NoisyDense(tf.keras.layers.Layer):
 
     def kernel(self,
                standard_normal=lambda shape: tf.random_normal(shape=shape)):
-        return self.mu_kernel + self.L_kernel().matmul(
-            standard_normal(self.mu_kernel.shape))
+        return (
+            self.mu_kernel
+            + tf.transpose(
+                self.L_kernel().matvec(standard_normal(self.mu_kernel.shape))
+            )
+        )  # yapf:disable
 
     def bias(self,
              standard_normal=lambda shape: tf.random_normal(shape=shape)):
-        return self.mu_bias + self.L_bias().matmul(
-            standard_normal(self.mu_bias.shape))
+        return (
+            self.mu_bias
+            + tf.transpose(
+                self.L_bias().matvec(standard_normal(self.mu_bias.shape))
+            )
+        )  # yapf:disable
 
     def call(self, inputs):
         return self.activation(inputs @ self.kernel() + self.bias())
@@ -102,10 +112,13 @@ class NoisyDense(tf.keras.layers.Layer):
             activation=self.activation)
 
     def entropy_cov_part(self):
-        return sum([
-            L.log_abs_determinant()
-            for L in [self.L_kernel(), self.L_bias()]
-        ]) / 2.0
+        return tf.reduce_sum(
+            tf.concat(
+                [
+                    L.log_abs_determinant()
+                    for L in [self.L_kernel(), self.L_bias()]
+                ],
+                axis=0)) / 2.0
 
 
 class ResNoisyDense(ResMixin, NoisyDense):
