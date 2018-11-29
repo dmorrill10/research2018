@@ -84,7 +84,9 @@ class NoisyDense(tf.keras.layers.Layer):
         return (
             self.mu_kernel
             + tf.transpose(
-                self.L_kernel().matvec(standard_normal(self.mu_kernel.shape))
+                self.L_kernel().matvec(
+                    standard_normal(list(reversed(self.mu_kernel.shape)))
+                )
             )
         )  # yapf:disable
 
@@ -93,7 +95,9 @@ class NoisyDense(tf.keras.layers.Layer):
         return (
             self.mu_bias
             + tf.transpose(
-                self.L_bias().matvec(standard_normal(self.mu_bias.shape))
+                self.L_bias().matvec(
+                    standard_normal(list(reversed(self.mu_bias.shape)))
+                )
             )
         )  # yapf:disable
 
