@@ -48,7 +48,7 @@ class NoisyDense(tf.keras.layers.Layer):
         self.mu_bias = self.add_weight(
             name='mu_bias',
             shape=tf.TensorShape((1, self.output_dim)),
-            initializer=self.mu_initializer,
+            initializer='zeros',
             trainable=True)
 
         def sigma_constraint(k):
