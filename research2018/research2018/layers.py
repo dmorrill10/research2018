@@ -124,8 +124,9 @@ class NoisyDense(tf.keras.layers.Layer):
             activation=self.activation)
 
     def entropy_cov_part(self):
+        aggregate = tf.stack if self.share_cov else tf.concat
         return tf.reduce_sum(
-            tf.concat(
+            aggregate(
                 [
                     L.log_abs_determinant()
                     for L in [self.L_kernel(), self.L_bias()]
