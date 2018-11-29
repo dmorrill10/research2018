@@ -57,21 +57,31 @@ class NoisyDense(tf.keras.layers.Layer):
             initializer='zeros',
             trainable=True)
 
-        self.sigma_kernel = self.add_weight(
-            name='sigma_kernel',
-            shape=(self._L_batch_dim, input_shape[1], input_shape[1]),
-            initializer=self.sigma_initializer,
-            trainable=self.sigma_trainable)
-        self.sigma_bias = self.add_weight(
-            name='sigma_bias',
-            shape=(self._L_batch_dim, 1, 1),
-            initializer=self.sigma_initializer,
-            trainable=self.sigma_trainable)
-        return super(NoisyDense, self).build(input_shape)
+        if self.share_cov:
+            self.sigma_kernel = self.add_weight(
+                name='sigma_kernel',
+                shape=(input_shape[1], input_shape[1]),
+                initializer=self.sigma_initializer,
+                trainable=self.sigma_trainable)
 
-    @property
-    def _L_batch_dim(self):
-        return 1 if self.share_cov else self.output_dim
+            self.sigma_bias = self.add_weight(
+                name='sigma_bias',
+                shape=(1, 1),
+                initializer=self.sigma_initializer,
+                trainable=self.sigma_trainable)
+        else:
+            self.sigma_kernel = self.add_weight(
+                name='sigma_kernel',
+                shape=(self.output_dim, input_shape[1], input_shape[1]),
+                initializer=self.sigma_initializer,
+                trainable=self.sigma_trainable)
+
+            self.sigma_bias = self.add_weight(
+                name='sigma_bias',
+                shape=(self.output_dim, 1, 1),
+                initializer=self.sigma_initializer,
+                trainable=self.sigma_trainable)
+        return super(NoisyDense, self).build(input_shape)
 
     def L_kernel(self):
         return tf.linalg.LinearOperatorLowerTriangular(self.sigma_kernel)
@@ -81,25 +91,21 @@ class NoisyDense(tf.keras.layers.Layer):
 
     def kernel(self,
                standard_normal=lambda shape: tf.random_normal(shape=shape)):
-        return (
-            self.mu_kernel
-            + tf.transpose(
-                self.L_kernel().matvec(
-                    standard_normal(list(reversed(self.mu_kernel.shape)))
-                )
-            )
-        )  # yapf:disable
+        if self.share_cov:
+            randomness = self.L_kernel().matmul(self.mu_kernel)
+        else:
+            randomness = tf.transpose(self.L_kernel().matvec(
+                standard_normal(list(reversed(self.mu_kernel.shape)))))
+        return self.mu_kernel + randomness
 
     def bias(self,
              standard_normal=lambda shape: tf.random_normal(shape=shape)):
-        return (
-            self.mu_bias
-            + tf.transpose(
-                self.L_bias().matvec(
-                    standard_normal(list(reversed(self.mu_bias.shape)))
-                )
-            )
-        )  # yapf:disable
+        if self.share_cov:
+            randomness = self.L_bias().matmul(self.mu_bias)
+        else:
+            randomness = tf.transpose(self.L_bias().matvec(
+                standard_normal(list(reversed(self.mu_bias.shape)))))
+        return self.mu_bias + randomness
 
     def call(self, inputs):
         return self.activation(inputs @ self.kernel() + self.bias())
