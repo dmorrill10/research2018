@@ -8,13 +8,14 @@ class ResMixin(object):
 
 
 class FixedDense(tf.keras.layers.Layer):
-    def __init__(self, kernel, bias, **kwargs):
+    def __init__(self, kernel, bias, activation=tf.identity, **kwargs):
         self.kernel = tf.convert_to_tensor(kernel)
         self.bias = tf.convert_to_tensor(bias)
+        self.activation = activation
         super(FixedDense, self).__init__(**kwargs)
 
     def call(self, inputs):
-        return inputs @ self.kernel + self.bias
+        return self.activation(inputs @ self.kernel + self.bias)
 
     def compute_output_shape(self, input_shape):
         shape = tf.TensorShape(input_shape).as_list()
@@ -99,7 +100,8 @@ class NoisyDense(tf.keras.layers.Layer):
             self.kernel(
                 lambda shape: np.random.normal(size=shape).astype('float32')),
             self.bias(
-                lambda shape: np.random.normal(size=shape).astype('float32')))
+                lambda shape: np.random.normal(size=shape).astype('float32')),
+            activation=self.activation)
 
     def entropy_cov_part(self):
         return sum([
