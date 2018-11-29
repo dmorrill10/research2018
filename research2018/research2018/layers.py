@@ -32,11 +32,15 @@ class NoisyDense(tf.keras.layers.Layer):
                 lambda shape, *args, **kwargs: tf.eye(shape[0].value, shape[1].value)
             ),
             activation=lambda z: z,
+            sigma_trainable=True,
+            share_cov=True,
             **kwargs):
         self.output_dim = output_dim
         self.mu_initializer = mu_initializer
         self.sigma_initializer = sigma_initializer
         self.activation = activation
+        self.sigma_trainable = sigma_trainable
+        self.share_cov = share_cov
         super(NoisyDense, self).__init__(**kwargs)
 
     def build(self, input_shape):
@@ -51,16 +55,18 @@ class NoisyDense(tf.keras.layers.Layer):
             initializer='zeros',
             trainable=True)
 
+        # TODO: Shared cov
+
         self.sigma_kernel = self.add_weight(
             name='sigma_kernel',
             shape=tf.TensorShape((input_shape[1], input_shape[1])),
             initializer=self.sigma_initializer,
-            trainable=True)
+            trainable=self.sigma_trainable)
         self.sigma_bias = self.add_weight(
             name='sigma_bias',
             shape=tf.TensorShape((1, 1)),
             initializer=self.sigma_initializer,
-            trainable=True)
+            trainable=self.sigma_trainable)
         return super(NoisyDense, self).build(input_shape)
 
     def L_kernel(self):
