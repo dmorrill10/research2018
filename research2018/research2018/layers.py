@@ -8,7 +8,7 @@ class ResMixin(object):
 
 
 class FixedDense(tf.keras.layers.Layer):
-    def __init__(self, kernel, bias, activation=tf.identity, **kwargs):
+    def __init__(self, kernel, bias, activation=lambda z: z, **kwargs):
         self.kernel = tf.convert_to_tensor(kernel)
         self.bias = tf.convert_to_tensor(bias)
         self.activation = activation
@@ -31,7 +31,7 @@ class NoisyDense(tf.keras.layers.Layer):
             sigma_initializer=(
                 lambda shape, *args, **kwargs: tf.eye(shape[0].value, shape[1].value)
             ),
-            activation=tf.identity,
+            activation=lambda z: z,
             **kwargs):
         self.output_dim = output_dim
         self.mu_initializer = mu_initializer
