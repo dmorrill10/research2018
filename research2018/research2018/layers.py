@@ -44,14 +44,16 @@ class NoisyDense(tf.keras.layers.Layer):
         super(NoisyDense, self).__init__(**kwargs)
 
     def build(self, input_shape):
+        input_shape = tf.TensorShape(input_shape).as_list()
+
         self.mu_kernel = self.add_weight(
             name='mu_kernel',
-            shape=tf.TensorShape((input_shape[1], self.output_dim)),
+            shape=(input_shape[1], self.output_dim),
             initializer=self.mu_initializer,
             trainable=True)
         self.mu_bias = self.add_weight(
             name='mu_bias',
-            shape=tf.TensorShape((1, self.output_dim)),
+            shape=(1, self.output_dim),
             initializer='zeros',
             trainable=True)
 
