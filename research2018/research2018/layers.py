@@ -28,9 +28,7 @@ class LnoisyDense(tf.keras.layers.Layer):
             self,
             output_dim,
             mu_initializer='zeros',
-            sigma_initializer=(
-                lambda shape, *args, **kwargs: tf.eye(shape[0].value, shape[1].value)
-            ),
+            sigma_initializer=tf.eye,
             activation=lambda z: z,
             sigma_trainable=True,
             share_cov=True,
