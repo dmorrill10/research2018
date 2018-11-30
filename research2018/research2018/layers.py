@@ -23,7 +23,7 @@ class FixedDense(tf.keras.layers.Layer):
         return tf.TensorShape(shape)
 
 
-class NoisyDense(tf.keras.layers.Layer):
+class LnoisyDense(tf.keras.layers.Layer):
     def __init__(
             self,
             output_dim,
@@ -41,7 +41,7 @@ class NoisyDense(tf.keras.layers.Layer):
         self.activation = activation
         self.sigma_trainable = sigma_trainable
         self.share_cov = share_cov
-        super(NoisyDense, self).__init__(**kwargs)
+        super(LnoisyDense, self).__init__(**kwargs)
 
     def build(self, input_shape):
         input_shape = tf.TensorShape(input_shape).as_list()
@@ -81,7 +81,7 @@ class NoisyDense(tf.keras.layers.Layer):
                 shape=(self.output_dim, 1, 1),
                 initializer=self.sigma_initializer,
                 trainable=self.sigma_trainable)
-        return super(NoisyDense, self).build(input_shape)
+        return super(LnoisyDense, self).build(input_shape)
 
     def L_kernel(self):
         return tf.linalg.LinearOperatorLowerTriangular(self.sigma_kernel)
@@ -107,8 +107,14 @@ class NoisyDense(tf.keras.layers.Layer):
                 standard_normal(list(reversed(self.mu_bias.shape)))))
         return self.mu_bias + randomness
 
-    def call(self, inputs):
-        return self.activation(inputs @ self.kernel() + self.bias())
+    def call(self, inputs, sample=True):
+        if sample:
+            k = self.kernel()
+            b = self.bias()
+        else:
+            k = self.mu_kernel
+            b = self.mu_bias
+        return self.activation(inputs @ k + b)
 
     def compute_output_shape(self, input_shape):
         shape = tf.TensorShape(input_shape).as_list()
@@ -134,5 +140,5 @@ class NoisyDense(tf.keras.layers.Layer):
                 axis=0)) / 2.0
 
 
-class ResNoisyDense(ResMixin, NoisyDense):
+class ResLnoisyDense(ResMixin, LnoisyDense):
     pass
