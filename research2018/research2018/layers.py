@@ -24,15 +24,14 @@ class FixedDense(tf.keras.layers.Layer):
 
 
 class LnoisyDense(tf.keras.layers.Layer):
-    def __init__(
-            self,
-            output_dim,
-            mu_initializer='zeros',
-            sigma_initializer=tf.eye,
-            activation=lambda z: z,
-            sigma_trainable=True,
-            share_cov=True,
-            **kwargs):
+    def __init__(self,
+                 output_dim,
+                 mu_initializer='zeros',
+                 sigma_initializer=tf.eye,
+                 activation=lambda z: z,
+                 sigma_trainable=True,
+                 share_cov=True,
+                 **kwargs):
         self.output_dim = output_dim
         self.mu_initializer = mu_initializer
         self.sigma_initializer = sigma_initializer
@@ -89,20 +88,24 @@ class LnoisyDense(tf.keras.layers.Layer):
 
     def kernel(self,
                standard_normal=lambda shape: tf.random_normal(shape=shape)):
+        epsilon = standard_normal(self.mu_kernel.shape)
         if self.share_cov:
-            randomness = self.L_kernel().matmul(self.mu_kernel)
+            randomness = self.L_kernel().matmul(epsilon)
         else:
-            randomness = tf.transpose(self.L_kernel().matvec(
-                standard_normal(list(reversed(self.mu_kernel.shape)))))
+            randomness = tf.transpose(
+                self.L_kernel().matvec(tf.transpose(epsilon))
+            )  # yapf:disable
         return self.mu_kernel + randomness
 
     def bias(self,
              standard_normal=lambda shape: tf.random_normal(shape=shape)):
+        epsilon = standard_normal(self.mu_bias.shape)
         if self.share_cov:
-            randomness = self.L_bias().matmul(self.mu_bias)
+            randomness = self.L_bias().matmul(epsilon)
         else:
-            randomness = tf.transpose(self.L_bias().matvec(
-                standard_normal(list(reversed(self.mu_bias.shape)))))
+            randomness = tf.transpose(
+                self.L_bias().matvec(tf.transpose(epsilon))
+            )  # yapf:disable
         return self.mu_bias + randomness
 
     def call(self, inputs, sample=True):
