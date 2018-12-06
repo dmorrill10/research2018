@@ -2,7 +2,6 @@ import tensorflow as tf
 import numpy as np
 from tensorflow.python.ops.resource_variable_ops import ResourceVariable
 from tf_contextual_prediction_with_expert_advice import \
-    rm_policy, \
     utility, \
     normalized
 
@@ -19,6 +18,28 @@ def exp_avg_next_policy_sum(policy_sum, _cur, t, alpha=0.9):
     return alpha * policy_sum + (1.0 - alpha) * _cur
 
 
+rm_positive_projection = tf.nn.relu
+
+
+def max_shifted_exp(v):
+    return tf.exp(v - tf.reduce_max(v, axis=-1))
+
+
+def hedge_positive_projection_factory(temp=1.0):
+    def f(v):
+        v = v / float(temp)
+        return max_shifted_exp(v)
+
+    return f
+
+
+def general_normal_hedge_dt_positive_projection(regrets, c):
+    def phi(v):
+        return max_shifted_exp(tf.square(tf.nn.relu(v)) / (3 * (c + 1)))
+
+    return (phi(regrets + 1.0) - phi(regrets - 1.0)) / 2.0
+
+
 class TabularCfrCurrent(object):
     @classmethod
     def zeros(cls, num_info_sets, num_actions, *args, **kwargs):
@@ -31,7 +52,11 @@ class TabularCfrCurrent(object):
     def __init__(self, regrets):
         self.regrets = ResourceVariable(regrets)
         self._has_updated = False
-        self._policy = rm_policy(self.regrets)
+        self._policy = normalized(
+            self.positive_projection(self.regrets), axis=1)
+
+    def positive_projection(self, v):
+        return rm_positive_projection(v)
 
     def save(self, name):
         np.save(name, self.regrets)
@@ -55,7 +80,8 @@ class TabularCfrCurrent(object):
 
     def policy(self):
         if tf.executing_eagerly() and self._has_updated:
-            self._policy = rm_policy(self.regrets)
+            self._policy = normalized(
+                self.positive_projection(self.regrets), axis=1)
             self._has_updated = False
         return self._policy
 
@@ -73,17 +99,61 @@ class TabularCfrCurrent(object):
         return evs, self.regrets.assign(r)
 
 
-class TabularCfr(object):
+class TabularAdaNormalHedgeCurrent(TabularCfrCurrent):
     @classmethod
     def zeros(cls, num_info_sets, num_actions, *args, **kwargs):
         return cls(
-            TabularCfrCurrent.zeros(num_info_sets, num_actions),
+            tf.zeros([num_info_sets, num_actions]),
             tf.zeros([num_info_sets, num_actions]), *args, **kwargs)
 
     @classmethod
     def load(cls, name):
+        return cls(*np.load('{}.npy'.format(name)))
+
+    def save(self, name):
+        np.save(name, [self.regrets, self._counts])
+        return self
+
+    def graph_save(self, name, sess):
+        np.save(name, sess.run([self.regrets, self._counts]))
+        return self
+
+    def __init__(self, regrets, counts=None):
+        self._counts = ResourceVariable(
+            tf.zeros_like(regrets) if counts is None else counts)
+        super().__init__(regrets)
+
+    def positive_projection(self, v):
+        return general_normal_hedge_dt_positive_projection(v, self._counts)
+
+    def update_with_cfv(self, cfv, rm_plus=False):
+        evs = utility(self.policy(), cfv)
+        regrets = cfv - evs
+
+        r = self.regrets + regrets
+        if rm_plus:
+            r = tf.nn.relu(r)
+        self._has_updated = True
+        return evs, tf.group(
+            self.regrets.assign(r), self._counts.assign_add(tf.abs(regrets)))
+
+
+class TabularCfr(object):
+    @classmethod
+    def zeros(cls,
+              num_info_sets,
+              num_actions,
+              *args,
+              cur_cls=TabularCfrCurrent,
+              **kwargs):
         return cls(
-            TabularCfrCurrent.load('{}.cur'.format(name)),
+            cur_cls.zeros(num_info_sets, num_actions),
+            tf.zeros([num_info_sets, num_actions]), *args, **kwargs)
+
+    @classmethod
+    def load(cls, name, cur_cls=TabularCfrCurrent):
+        return cls(
+            cur_cls.load('{}.cur'.format(name)),
             *np.load('{}.npy'.format(name)))
 
     def __init__(self, cur, policy_sum, t=0):
