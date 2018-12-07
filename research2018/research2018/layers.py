@@ -1,145 +1,134 @@
 import tensorflow as tf
-import numpy as np
+import tensorflow_probability as tfp
+import tensorflow_probability.distributions as tfd
 
 
 class ResMixin(object):
-    def call(self, inputs):
-        return super().call(inputs) + inputs
-
-
-class FixedDense(tf.keras.layers.Layer):
-    def __init__(self, kernel, bias, activation=lambda z: z, **kwargs):
-        self.kernel = tf.convert_to_tensor(kernel)
-        self.bias = tf.convert_to_tensor(bias)
-        self.activation = activation
-        super(FixedDense, self).__init__(**kwargs)
+    def __init__(self, *args, residual_weight=1.0, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.residual_weight = residual_weight
 
     def call(self, inputs):
-        return self.activation(inputs @ self.kernel + self.bias)
-
-    def compute_output_shape(self, input_shape):
-        shape = tf.TensorShape(input_shape).as_list()
-        shape[-1] = self.kernel.shape[-1].value
-        return tf.TensorShape(shape)
+        return super().call(inputs) + self.residual_weight * inputs
 
 
-class LnoisyDense(tf.keras.layers.Layer):
-    def __init__(self,
-                 output_dim,
-                 mu_initializer='zeros',
-                 sigma_initializer=tf.eye,
-                 activation=lambda z: z,
-                 sigma_trainable=True,
-                 share_cov=True,
-                 **kwargs):
-        self.output_dim = output_dim
-        self.mu_initializer = mu_initializer
-        self.sigma_initializer = sigma_initializer
-        self.activation = activation
-        self.sigma_trainable = sigma_trainable
-        self.share_cov = share_cov
-        super(LnoisyDense, self).__init__(**kwargs)
+def mvn_posterior_fn(dtype,
+                     shape,
+                     name,
+                     trainable,
+                     add_variable_fn,
+                     share_cov=True):
+    if len(shape) > 1:
+        batch_size = shape[1]
+        dimensionality = shape[0]
 
-    def build(self, input_shape):
-        input_shape = tf.TensorShape(input_shape).as_list()
+        loc = add_variable_fn(
+            'loc',
+            shape=[batch_size, dimensionality],
+            dtype=dtype,
+            trainable=trainable,
+            initializer=tf.keras.initializers.zeros())
 
-        self.mu_kernel = self.add_weight(
-            name='mu_kernel',
-            shape=(input_shape[1], self.output_dim),
-            initializer=self.mu_initializer,
-            trainable=True)
-        self.mu_bias = self.add_weight(
-            name='mu_bias',
-            shape=(1, self.output_dim),
-            initializer='zeros',
-            trainable=True)
-
-        if self.share_cov:
-            self.sigma_kernel = self.add_weight(
-                name='sigma_kernel',
-                shape=(input_shape[1], input_shape[1]),
-                initializer=self.sigma_initializer,
-                trainable=self.sigma_trainable)
-
-            self.sigma_bias = self.add_weight(
-                name='sigma_bias',
-                shape=(1, 1),
-                initializer=self.sigma_initializer,
-                trainable=self.sigma_trainable)
+        if share_cov:
+            return tfd.MultivariateNormalTriL(
+                loc=loc,
+                scale_tril=add_variable_fn(
+                    'scale_tril',
+                    shape=[dimensionality, dimensionality],
+                    dtype=dtype,
+                    trainable=trainable,
+                    initializer=lambda shape, *args, **kwargs: (
+                        1e-10 * tf.eye(*shape[1:], batch_shape=[1])
+                    )
+                )
+            )
         else:
-            self.sigma_kernel = self.add_weight(
-                name='sigma_kernel',
-                shape=(self.output_dim, input_shape[1], input_shape[1]),
-                initializer=self.sigma_initializer,
-                trainable=self.sigma_trainable)
-
-            self.sigma_bias = self.add_weight(
-                name='sigma_bias',
-                shape=(self.output_dim, 1, 1),
-                initializer=self.sigma_initializer,
-                trainable=self.sigma_trainable)
-        return super(LnoisyDense, self).build(input_shape)
-
-    def L_kernel(self):
-        return tf.linalg.LinearOperatorLowerTriangular(self.sigma_kernel)
-
-    def L_bias(self):
-        return tf.linalg.LinearOperatorLowerTriangular(self.sigma_bias)
-
-    def kernel(self,
-               standard_normal=lambda shape: tf.random_normal(shape=shape)):
-        epsilon = standard_normal(self.mu_kernel.shape)
-        if self.share_cov:
-            randomness = self.L_kernel().matmul(epsilon)
-        else:
-            randomness = tf.transpose(
-                self.L_kernel().matvec(tf.transpose(epsilon))
-            )  # yapf:disable
-        return self.mu_kernel + randomness
-
-    def bias(self,
-             standard_normal=lambda shape: tf.random_normal(shape=shape)):
-        epsilon = standard_normal(self.mu_bias.shape)
-        if self.share_cov:
-            randomness = self.L_bias().matmul(epsilon)
-        else:
-            randomness = tf.transpose(
-                self.L_bias().matvec(tf.transpose(epsilon))
-            )  # yapf:disable
-        return self.mu_bias + randomness
-
-    def call(self, inputs, sample=True):
-        if sample:
-            k = self.kernel()
-            b = self.bias()
-        else:
-            k = self.mu_kernel
-            b = self.mu_bias
-        return self.activation(inputs @ k + b)
-
-    def compute_output_shape(self, input_shape):
-        shape = tf.TensorShape(input_shape).as_list()
-        shape[-1] = self.output_dim
-        return tf.TensorShape(shape)
-
-    def sample(self):
-        return FixedDense(
-            self.kernel(
-                lambda shape: np.random.normal(size=shape).astype('float32')),
-            self.bias(
-                lambda shape: np.random.normal(size=shape).astype('float32')),
-            activation=self.activation)
-
-    def entropy_cov_part(self):
-        aggregate = tf.stack if self.share_cov else tf.concat
-        return tf.reduce_sum(
-            aggregate(
-                [
-                    L.log_abs_determinant()
-                    for L in [self.L_kernel(), self.L_bias()]
-                ],
-                axis=0)) / 2.0
+            return tfd.MultivariateNormalTriL(
+                loc=loc,
+                scale_tril=add_variable_fn(
+                    'scale_tril',
+                    shape=[batch_size, dimensionality, dimensionality],
+                    dtype=dtype,
+                    trainable=trainable,
+                    initializer=lambda shape, *args, **kwargs: (
+                        1e-10 * tf.eye(*shape[1:], batch_shape=shape[0:1])
+                    )
+                )
+            )
+    else:
+        return tfd.Normal(
+            loc=add_variable_fn(
+                'loc',
+                shape=[shape[0]],
+                dtype=dtype,
+                trainable=trainable,
+                initializer=tf.keras.initializers.zeros()),
+            scale=add_variable_fn(
+                'scale',
+                shape=[shape[0]],
+                dtype=dtype,
+                trainable=trainable,
+                initializer=(
+                    lambda shape, dtype, partition_info: tf.fill(shape, 1e-10)
+                )))
 
 
-class ResLnoisyDense(ResMixin, LnoisyDense):
+mvn_posterior_fn_shared_cov = mvn_posterior_fn
+
+
+def mvn_posterior_fn_independent_cov(*args, **kwargs):
+    return mvn_posterior_fn(*args, **kwargs, share_cov=False)
+
+
+def mvn_sample(d):
+    return tf.transpose(d.sample())
+
+
+def mvn_prior(dtype, shape, name, trainable, add_variable_fn, scale=1.0):
+    # TODO: Why is trainable True here?
+    if len(shape) > 1:
+        return tfd.MultivariateNormalDiag(
+            tf.zeros(reversed(shape), dtype=dtype),
+            scale_identity_multiplier=scale,
+            name=name)
+    else:
+        return tfd.Normal(
+            tf.zeros(shape[0], dtype=dtype), scale=scale, name=name)
+
+
+class DenseMvn(tfp.layers.DenseReparameterization):
+    def __init__(self, *args, **kwargs):
+        super().__init__(
+            *args,
+            kernel_prior_fn=mvn_prior,
+            kernel_posterior_fn=mvn_posterior_fn_independent_cov,
+            kernel_posterior_tensor_fn=mvn_sample,
+            bias_prior_fn=mvn_prior,
+            bias_posterior_fn=mvn_posterior_fn_independent_cov,
+            bias_posterior_tensor_fn=mvn_sample,
+            **kwargs)
+
+
+class DenseMvnSharedCov(tfp.layers.DenseReparameterization):
+    def __init__(self, *args, **kwargs):
+        super().__init__(
+            *args,
+            kernel_prior_fn=mvn_prior,
+            kernel_posterior_fn=mvn_posterior_fn_shared_cov,
+            kernel_posterior_tensor_fn=mvn_sample,
+            bias_prior_fn=mvn_prior,
+            bias_posterior_fn=mvn_posterior_fn_shared_cov,
+            bias_posterior_tensor_fn=mvn_sample,
+            **kwargs)
+
+
+class ResDenseMvnSharedCov(ResMixin, DenseMvnSharedCov):
+    pass
+
+
+class ResDenseFlipout(ResMixin, tfp.layers.DenseFlipout):
+    pass
+
+
+class ResConvolution2DFlipout(ResMixin, tfp.layers.Convolution2DFlipout):
     pass
