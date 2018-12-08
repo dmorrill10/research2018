@@ -85,6 +85,10 @@ def mvn_sample(d):
     return tf.transpose(d.sample())
 
 
+def mvn_mean(d):
+    return tf.transpose(d.mean())
+
+
 def mvn_prior(dtype, shape, name, trainable, add_variable_fn, scale=1.0):
     # TODO: Why is trainable True here?
     if len(shape) > 1:
@@ -97,33 +101,20 @@ def mvn_prior(dtype, shape, name, trainable, add_variable_fn, scale=1.0):
             tf.zeros(shape[0], dtype=dtype), scale=scale, name=name)
 
 
-def mean_dense(var_dense_layer):
+def deterministic_dense(var_dense_layer, tensor_fn=lambda d: d.mean()):
     use_bias = var_dense_layer.bias_posterior is not None
     return tfk.layers.Dense(
         var_dense_layer.units,
         activation=var_dense_layer.activation,
         use_bias=use_bias,
         kernel_initializer=(
-            lambda *_, **__: var_dense_layer.kernel_posterior.mean()),
+            lambda *_, **__: tensor_fn(var_dense_layer.kernel_posterior)),
         bias_initializer=(
-            lambda *_, **__: var_dense_layer.bias_posterior.mean()),
+            lambda *_, **__: tensor_fn(var_dense_layer.bias_posterior)),
         activity_regularizer=var_dense_layer.activity_regularizer)
 
 
-def sample_dense(var_dense_layer):
-    use_bias = var_dense_layer.bias_posterior is not None
-    return tfk.layers.Dense(
-        var_dense_layer.units,
-        activation=var_dense_layer.activation,
-        use_bias=use_bias,
-        kernel_initializer=(
-            lambda *_, **__: var_dense_layer.kernel_posterior.sample()),
-        bias_initializer=(
-            lambda *_, **__: var_dense_layer.bias_posterior.sample()),
-        activity_regularizer=var_dense_layer.activity_regularizer)
-
-
-def mean_conv2d(var_conv2d_layer):
+def deterministic_conv2d(var_conv2d_layer, tensor_fn=lambda d: d.mean()):
     use_bias = var_conv2d_layer.bias_posterior is not None
     return tfk.layers.Conv2D(
         var_conv2d_layer.filters,
@@ -135,27 +126,9 @@ def mean_conv2d(var_conv2d_layer):
         activation=var_conv2d_layer.activation,
         use_bias=use_bias,
         kernel_initializer=(
-            lambda *_, **__: var_conv2d_layer.kernel_posterior.mean()),
+            lambda *_, **__: tensor_fn(var_conv2d_layer.kernel_posterior)),
         bias_initializer=(
-            lambda *_, **__: var_conv2d_layer.bias_posterior.mean()),
-        activity_regularizer=var_conv2d_layer.activity_regularizer)
-
-
-def sample_conv2d(var_conv2d_layer):
-    use_bias = var_conv2d_layer.bias_posterior is not None
-    return tfk.layers.Conv2D(
-        var_conv2d_layer.filters,
-        var_conv2d_layer.kernel_size,
-        strides=var_conv2d_layer.strides,
-        padding=var_conv2d_layer.padding,
-        data_format=var_conv2d_layer.data_format,
-        dilation_rate=var_conv2d_layer.dilation_rate,
-        activation=var_conv2d_layer.activation,
-        use_bias=use_bias,
-        kernel_initializer=(
-            lambda *_, **__: var_conv2d_layer.kernel_posterior.sample()),
-        bias_initializer=(
-            lambda *_, **__: var_conv2d_layer.bias_posterior.sample()),
+            lambda *_, **__: tensor_fn(var_conv2d_layer.bias_posterior)),
         activity_regularizer=var_conv2d_layer.activity_regularizer)
 
 
@@ -163,30 +136,21 @@ def clone_layer(layer):
     return layer.__class__.from_config(layer.get_config())
 
 
-def mean_model(model):
-    def mean_layer(layer):
+def deterministic_layer(layer, tensor_fn=lambda d: d.mean()):
+    try:
+        return deterministic_dense(layer, tensor_fn)
+    except:
         try:
-            return mean_dense(layer)
+            return deterministic_conv2d(layer, tensor_fn)
         except:
-            try:
-                return mean_conv2d(layer)
-            except:
-                return clone_layer(layer)
-
-    return model.__class__([mean_layer(layer) for layer in model.layers])
+            return clone_layer(layer)
 
 
-def sample_model(model):
-    def sample_layer(layer):
-        try:
-            return sample_dense(layer)
-        except:
-            try:
-                return sample_conv2d(layer)
-            except:
-                return clone_layer(layer)
-
-    return model.__class__([sample_layer(layer) for layer in model.layers])
+def deterministic_model(model, *tensor_fns):
+    return model.__class__([
+        deterministic_layer(layer, tensor_fns[i])
+        for i, layer in enumerate(model.layers)
+    ])
 
 
 class DenseMvn(tfp.layers.DenseReparameterization):
