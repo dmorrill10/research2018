@@ -1,6 +1,7 @@
 import tensorflow as tf
 import tensorflow_probability as tfp
 tfd = tfp.distributions
+tfk = tf.keras
 
 
 class ResMixin(object):
@@ -27,7 +28,7 @@ def mvn_posterior_fn(dtype,
             shape=[batch_size, dimensionality],
             dtype=dtype,
             trainable=trainable,
-            initializer=tf.keras.initializers.zeros())
+            initializer=tfk.initializers.zeros())
 
         if share_cov:
             return tfd.MultivariateNormalTriL(
@@ -62,7 +63,7 @@ def mvn_posterior_fn(dtype,
                 shape=[shape[0]],
                 dtype=dtype,
                 trainable=trainable,
-                initializer=tf.keras.initializers.zeros()),
+                initializer=tfk.initializers.zeros()),
             scale=add_variable_fn(
                 'scale',
                 shape=[shape[0]],
@@ -96,30 +97,118 @@ def mvn_prior(dtype, shape, name, trainable, add_variable_fn, scale=1.0):
             tf.zeros(shape[0], dtype=dtype), scale=scale, name=name)
 
 
+def mean_dense(var_dense_layer):
+    use_bias = var_dense_layer.bias_posterior is not None
+    return tfk.layers.Dense(
+        var_dense_layer.units,
+        activation=var_dense_layer.activation,
+        use_bias=use_bias,
+        kernel_initializer=(
+            lambda *_, **__: var_dense_layer.kernel_posterior.mean()),
+        bias_initializer=(
+            lambda *_, **__: var_dense_layer.bias_posterior.mean()),
+        activity_regularizer=var_dense_layer.activity_regularizer)
+
+
+def sample_dense(var_dense_layer):
+    use_bias = var_dense_layer.bias_posterior is not None
+    return tfk.layers.Dense(
+        var_dense_layer.units,
+        activation=var_dense_layer.activation,
+        use_bias=use_bias,
+        kernel_initializer=(
+            lambda *_, **__: var_dense_layer.kernel_posterior.sample()),
+        bias_initializer=(
+            lambda *_, **__: var_dense_layer.bias_posterior.sample()),
+        activity_regularizer=var_dense_layer.activity_regularizer)
+
+
+def mean_conv2d(var_conv2d_layer):
+    use_bias = var_conv2d_layer.bias_posterior is not None
+    return tfk.layers.Conv2D(
+        var_conv2d_layer.filters,
+        var_conv2d_layer.kernel_size,
+        strides=var_conv2d_layer.strides,
+        padding=var_conv2d_layer.padding,
+        data_format=var_conv2d_layer.data_format,
+        dilation_rate=var_conv2d_layer.dilation_rate,
+        activation=var_conv2d_layer.activation,
+        use_bias=use_bias,
+        kernel_initializer=(
+            lambda *_, **__: var_conv2d_layer.kernel_posterior.mean()),
+        bias_initializer=(
+            lambda *_, **__: var_conv2d_layer.bias_posterior.mean()),
+        activity_regularizer=var_conv2d_layer.activity_regularizer)
+
+
+def sample_conv2d(var_conv2d_layer):
+    use_bias = var_conv2d_layer.bias_posterior is not None
+    return tfk.layers.Conv2D(
+        var_conv2d_layer.filters,
+        var_conv2d_layer.kernel_size,
+        strides=var_conv2d_layer.strides,
+        padding=var_conv2d_layer.padding,
+        data_format=var_conv2d_layer.data_format,
+        dilation_rate=var_conv2d_layer.dilation_rate,
+        activation=var_conv2d_layer.activation,
+        use_bias=use_bias,
+        kernel_initializer=(
+            lambda *_, **__: var_conv2d_layer.kernel_posterior.sample()),
+        bias_initializer=(
+            lambda *_, **__: var_conv2d_layer.bias_posterior.sample()),
+        activity_regularizer=var_conv2d_layer.activity_regularizer)
+
+
+def clone_layer(layer):
+    return layer.__class__.from_config(layer.get_config())
+
+
+def mean_model(model):
+    def mean_layer(layer):
+        try:
+            return mean_dense(layer)
+        except:
+            try:
+                return mean_conv2d(layer)
+            except:
+                return clone_layer(layer)
+
+    return model.__class__([mean_layer(layer) for layer in model.layers])
+
+
+def sample_model(model):
+    def sample_layer(layer):
+        try:
+            return sample_dense(layer)
+        except:
+            try:
+                return sample_conv2d(layer)
+            except:
+                return clone_layer(layer)
+
+    return model.__class__([sample_layer(layer) for layer in model.layers])
+
+
 class DenseMvn(tfp.layers.DenseReparameterization):
     def __init__(self, *args, **kwargs):
-        super().__init__(
-            *args,
-            kernel_prior_fn=mvn_prior,
-            kernel_posterior_fn=mvn_posterior_fn_independent_cov,
-            kernel_posterior_tensor_fn=mvn_sample,
-            bias_prior_fn=mvn_prior,
-            bias_posterior_fn=mvn_posterior_fn_independent_cov,
-            bias_posterior_tensor_fn=mvn_sample,
-            **kwargs)
+        kwargs['kernel_prior_fn'] = mvn_prior
+        kwargs['kernel_posterior_fn'] = mvn_posterior_fn_independent_cov
+        kwargs['kernel_posterior_tensor_fn'] = mvn_sample
+        kwargs['bias_prior_fn'] = mvn_prior
+        kwargs['bias_posterior_fn'] = mvn_posterior_fn_independent_cov
+        kwargs['bias_posterior_tensor_fn'] = mvn_sample
+        super().__init__(*args, **kwargs)
 
 
 class DenseMvnSharedCov(tfp.layers.DenseReparameterization):
     def __init__(self, *args, **kwargs):
-        super().__init__(
-            *args,
-            kernel_prior_fn=mvn_prior,
-            kernel_posterior_fn=mvn_posterior_fn_shared_cov,
-            kernel_posterior_tensor_fn=mvn_sample,
-            bias_prior_fn=mvn_prior,
-            bias_posterior_fn=mvn_posterior_fn_shared_cov,
-            bias_posterior_tensor_fn=mvn_sample,
-            **kwargs)
+        kwargs['kernel_prior_fn'] = mvn_prior
+        kwargs['kernel_posterior_fn'] = mvn_posterior_fn_shared_cov
+        kwargs['kernel_posterior_tensor_fn'] = mvn_sample
+        kwargs['bias_prior_fn'] = mvn_prior
+        kwargs['bias_posterior_fn'] = mvn_posterior_fn_shared_cov
+        kwargs['bias_posterior_tensor_fn'] = mvn_sample
+        super().__init__(*args, **kwargs)
 
 
 class ResDenseMvnSharedCov(ResMixin, DenseMvnSharedCov):
