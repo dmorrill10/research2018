@@ -22,7 +22,7 @@ rm_positive_projection = tf.nn.relu
 
 
 def max_shifted_exp(v):
-    return tf.exp(v - tf.reduce_max(v, axis=-1))
+    return tf.exp(v - tf.reduce_max(v, axis=-1, keepdims=True))
 
 
 def hedge_positive_projection_factory(temp=1.0):
@@ -34,10 +34,15 @@ def hedge_positive_projection_factory(temp=1.0):
 
 
 def general_normal_hedge_dt_positive_projection(regrets, c):
-    def phi(v):
-        return max_shifted_exp(tf.square(tf.nn.relu(v)) / (3 * (c + 1)))
+    rp1 = regrets + 1.0
+    max_rp1_squared = tf.square(
+        tf.reduce_max(tf.nn.relu(rp1), axis=-1, keepdims=True))
 
-    return (phi(regrets + 1.0) - phi(regrets - 1.0)) / 2.0
+    def phi(v):
+        return tf.exp(
+            (tf.square(tf.nn.relu(v)) - max_rp1_squared) / (3 * (c + 1)))
+
+    return (phi(rp1) - phi(regrets - 1.0)) / 2.0
 
 
 class TabularCfrCurrent(object):
