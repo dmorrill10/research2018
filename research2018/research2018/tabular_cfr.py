@@ -60,12 +60,10 @@ def poly_exp_approx(x, degree=1):
 
 def general_normal_poly_hedge_positive_projection(regrets, c, degree=1):
     rp1 = regrets + 1.0
-    max_rp1_squared = tf.square(
-        tf.reduce_max(tf.nn.relu(rp1), axis=-1, keepdims=True))
 
     def phi(v):
         return poly_exp_approx(
-            (tf.square(tf.nn.relu(v)) - max_rp1_squared) / (3 * (c + 1)),
+            tf.square(tf.nn.relu(v)) / (3 * (c + 1)),
             degree=degree)
 
     # Omit the 1/2 factor since they will be normalized anyway.
