@@ -175,50 +175,8 @@ class DenseMvnSharedCov(tfp.layers.DenseReparameterization):
         super().__init__(*args, **kwargs)
 
 
-class Conv2DMvn(tfp.layers.Convolution2DReparameterization):
-    def __init__(self, *args, **kwargs):
-        kwargs['kernel_prior_fn'] = mvn_prior
-        kwargs['kernel_posterior_fn'] = mvn_posterior_fn_independent_cov
-        kwargs['kernel_posterior_tensor_fn'] = mvn_sample
-        kwargs['bias_prior_fn'] = mvn_prior
-        kwargs['bias_posterior_fn'] = mvn_posterior_fn_independent_cov
-        kwargs['bias_posterior_tensor_fn'] = mvn_sample
-        super().__init__(*args, **kwargs)
-
-
-Convolution2DMvn = Conv2DMvn
-
-
-class Conv2DMvnSharedCov(tfp.layers.Convolution2DReparameterization):
-    def __init__(self, *args, **kwargs):
-        kwargs['kernel_prior_fn'] = mvn_prior
-        kwargs['kernel_posterior_fn'] = mvn_posterior_fn_shared_cov
-        kwargs['kernel_posterior_tensor_fn'] = mvn_sample
-        kwargs['bias_prior_fn'] = mvn_prior
-        kwargs['bias_posterior_fn'] = mvn_posterior_fn_shared_cov
-        kwargs['bias_posterior_tensor_fn'] = mvn_sample
-        super().__init__(*args, **kwargs)
-
-
-Convolution2DMvnSharedCov = Conv2DMvnSharedCov
-
-
 class ResDenseMvnSharedCov(ResMixin, DenseMvnSharedCov):
     pass
-
-
-class ResConv2DMvn(ResMixin, Conv2DMvn):
-    pass
-
-
-ResConvolution2DMvn = ResConv2DMvn
-
-
-class ResConv2DMvnSharedCov(ResMixin, Conv2DMvnSharedCov):
-    pass
-
-
-ResConvolution2DMvnSharedCov = ResConv2DMvnSharedCov
 
 
 class ResDenseFlipout(ResMixin, tfp.layers.DenseFlipout):
