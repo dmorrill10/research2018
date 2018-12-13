@@ -40,7 +40,7 @@ def poly_exp_approx(x, degree=1):
         )
     y = 1 + x
     z = 1
-    for d in range(degree - 1):
+    for d in range(2, degree + 1):
         z *= d
         y += tf.pow(x, d) / z
     return tf.nn.relu(y)
