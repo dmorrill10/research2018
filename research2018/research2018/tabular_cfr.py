@@ -42,7 +42,34 @@ def general_normal_hedge_dt_positive_projection(regrets, c):
         return tf.exp(
             (tf.square(tf.nn.relu(v)) - max_rp1_squared) / (3 * (c + 1)))
 
-    return (phi(rp1) - phi(regrets - 1.0)) / 2.0
+    # Omit the 1/2 factor since they will be normalized anyway.
+    return phi(rp1) - phi(regrets - 1.0)
+
+
+def poly_exp_approx(x, degree=1):
+    raise RuntimeError(
+        'Degree must be odd to ensure that sufficiently negative inputs yield non-positive outputs'
+    )
+    y = 1 + x
+    z = 1
+    for d in range(degree - 1):
+        z *= d
+        y += tf.pow(x, d) / z
+    return tf.nn.relu(y)
+
+
+def general_normal_poly_hedge_positive_projection(regrets, c, degree=1):
+    rp1 = regrets + 1.0
+    max_rp1_squared = tf.square(
+        tf.reduce_max(tf.nn.relu(rp1), axis=-1, keepdims=True))
+
+    def phi(v):
+        return poly_exp_approx(
+            (tf.square(tf.nn.relu(v)) - max_rp1_squared) / (3 * (c + 1)),
+            degree=degree)
+
+    # Omit the 1/2 factor since they will be normalized anyway.
+    return (phi(rp1) - phi(regrets - 1.0))
 
 
 class TabularCfrCurrent(object):
