@@ -186,6 +186,9 @@ class Conv2DMvn(tfp.layers.Convolution2DReparameterization):
         super().__init__(*args, **kwargs)
 
 
+Convolution2DMvn = Conv2DMvn
+
+
 class Conv2DMvnSharedCov(tfp.layers.Convolution2DReparameterization):
     def __init__(self, *args, **kwargs):
         kwargs['kernel_prior_fn'] = mvn_prior
@@ -197,6 +200,9 @@ class Conv2DMvnSharedCov(tfp.layers.Convolution2DReparameterization):
         super().__init__(*args, **kwargs)
 
 
+Convolution2DMvnSharedCov = Conv2DMvnSharedCov
+
+
 class ResDenseMvnSharedCov(ResMixin, DenseMvnSharedCov):
     pass
 
@@ -205,8 +211,14 @@ class ResConv2DMvn(ResMixin, Conv2DMvn):
     pass
 
 
+ResConvolution2DMvn = ResConv2DMvn
+
+
 class ResConv2DMvnSharedCov(ResMixin, Conv2DMvnSharedCov):
     pass
+
+
+ResConvolution2DMvnSharedCov = ResConv2DMvnSharedCov
 
 
 class ResDenseFlipout(ResMixin, tfp.layers.DenseFlipout):
@@ -215,3 +227,6 @@ class ResDenseFlipout(ResMixin, tfp.layers.DenseFlipout):
 
 class ResConvolution2DFlipout(ResMixin, tfp.layers.Convolution2DFlipout):
     pass
+
+
+ResConv2DFlipout = ResConvolution2DFlipout
