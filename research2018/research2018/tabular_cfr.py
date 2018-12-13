@@ -33,23 +33,11 @@ def hedge_positive_projection_factory(temp=1.0):
     return f
 
 
-def general_normal_hedge_dt_positive_projection(regrets, c):
-    rp1 = regrets + 1.0
-    max_rp1_squared = tf.square(
-        tf.reduce_max(tf.nn.relu(rp1), axis=-1, keepdims=True))
-
-    def phi(v):
-        return tf.exp(
-            (tf.square(tf.nn.relu(v)) - max_rp1_squared) / (3 * (c + 1)))
-
-    # Omit the 1/2 factor since they will be normalized anyway.
-    return phi(rp1) - phi(regrets - 1.0)
-
-
 def poly_exp_approx(x, degree=1):
-    raise RuntimeError(
-        'Degree must be odd to ensure that sufficiently negative inputs yield non-positive outputs'
-    )
+    if degree % 2 == 0:
+        raise RuntimeError(
+            'Degree must be odd to ensure that sufficiently negative inputs yield non-positive outputs'
+        )
     y = 1 + x
     z = 1
     for d in range(degree - 1):
@@ -58,16 +46,24 @@ def poly_exp_approx(x, degree=1):
     return tf.nn.relu(y)
 
 
-def general_normal_poly_hedge_positive_projection(regrets, c, degree=1):
+def general_normal_hedge_dt_positive_projection(regrets, c, degree=-1):
     rp1 = regrets + 1.0
 
-    def phi(v):
-        return poly_exp_approx(
-            tf.square(tf.nn.relu(v)) / (3 * (c + 1)),
-            degree=degree)
+    if degree > 0:
+
+        def phi(v):
+            return poly_exp_approx(
+                tf.square(tf.nn.relu(v)) / (3 * (c + 1)), degree=degree)
+    else:
+        max_rp1_squared = tf.square(
+            tf.reduce_max(tf.nn.relu(rp1), axis=-1, keepdims=True))
+
+        def phi(v):
+            return tf.exp(
+                (tf.square(tf.nn.relu(v)) - max_rp1_squared) / (3 * (c + 1)))
 
     # Omit the 1/2 factor since they will be normalized anyway.
-    return (phi(rp1) - phi(regrets - 1.0))
+    return phi(rp1) - phi(regrets - 1.0)
 
 
 class TabularCfrCurrent(object):
@@ -148,13 +144,15 @@ class TabularAdaNormalHedgeCurrent(TabularCfrCurrent):
         np.save(name, sess.run([self.regrets, self._counts]))
         return self
 
-    def __init__(self, regrets, counts=None):
+    def __init__(self, regrets, counts=None, degree=-1):
         self._counts = ResourceVariable(
             tf.zeros_like(regrets) if counts is None else counts)
+        self._degree = degree
         super().__init__(regrets)
 
     def positive_projection(self, v):
-        return general_normal_hedge_dt_positive_projection(v, self._counts)
+        return general_normal_hedge_dt_positive_projection(
+            v, self._counts, degree=self._degree)
 
     def update_with_cfv(self, cfv, rm_plus=False):
         evs = utility(self.policy(), cfv)
