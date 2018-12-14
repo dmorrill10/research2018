@@ -183,6 +183,14 @@ class ResDenseFlipout(ResMixin, tfp.layers.DenseFlipout):
     pass
 
 
+class ResConvolution2DReparameterization(
+        ResMixin, tfp.layers.Convolution2DReparameterization):
+    pass
+
+
+ResConv2DReparameterization = ResConvolution2DReparameterization
+
+
 class ResConvolution2DFlipout(ResMixin, tfp.layers.Convolution2DFlipout):
     pass
 
