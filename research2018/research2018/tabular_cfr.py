@@ -124,6 +124,14 @@ class TabularCfrCurrent(object):
         self._has_updated = True
         return evs, self.regrets.assign(r)
 
+    @property
+    def variables(self):
+        return [self.regrets]
+
+    @property
+    def initializer(self):
+        return tf.group(*[v.initializer for v in self.variables])
+
 
 class TabularAdaNormalHedgeCurrent(TabularCfrCurrent):
     @classmethod
@@ -164,6 +172,10 @@ class TabularAdaNormalHedgeCurrent(TabularCfrCurrent):
         self._has_updated = True
         return evs, tf.group(
             self.regrets.assign(r), self._counts.assign_add(tf.abs(regrets)))
+
+    @property
+    def variables(self):
+        return super().variables + [self._counts]
 
 
 class TabularCfr(object):
@@ -258,3 +270,11 @@ class TabularCfr(object):
             next_policy_sum(self.policy_sum, cur,
                             tf.cast(self.t + 1, tf.float32)))
         return evs, tf.group(update_policy_sum, update_current, update_t)
+
+    @property
+    def variables(self):
+        return self._cur.variables + [self.policy_sum, self.t]
+
+    @property
+    def initializer(self):
+        return tf.group(*[v.initializer for v in self.variables])
