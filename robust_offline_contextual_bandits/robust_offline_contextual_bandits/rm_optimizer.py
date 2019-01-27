@@ -150,7 +150,10 @@ class CompositeVariableOptimizer(optimizer.Optimizer):
         self._variable_optimizers = None
 
     def variables(self):
-        return sum([opt.variables() for opt in self._variable_optimizers], [])
+        return sum([
+            list(opt.variables())
+            for opt in self._variable_optimizers.values()
+        ], [])
 
     def _create_slots(self, var_list):
         self._variable_optimizers = {}
