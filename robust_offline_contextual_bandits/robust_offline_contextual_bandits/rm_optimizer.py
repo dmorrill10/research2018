@@ -92,6 +92,7 @@ class GradEvBasedVariableOptimizer(VariableOptimizer):
 
             tf.summary.histogram('cumulative_gradients', grad)
             tf.summary.histogram('cumulative_ev', ev)
+        return tf.group(grad.initializer, ev.initializer)
 
     def updated_grad(self, grad, scale=1.0, descale=True):
         return self.get_slot('cumulative_gradients').assign_add(
@@ -147,20 +148,24 @@ class CompositeVariableOptimizer(optimizer.Optimizer):
 
     def _create_slots(self, var_list):
         self._variable_optimizers = {}
+        initializers = []
         with tf.variable_scope(self._name):
             for i in range(len(var_list)):
                 var = var_list[i]
                 self._variable_optimizers[
                     var] = self._variable_optimizer_factory(var, i)
-                self._variable_optimizers[var].create_slots()
+                initializers.append(
+                    self._variable_optimizers[var].create_slots())
+        return tf.group(*initializers)
 
     def apply_gradients(self, grads_and_vars, global_step=None, name=None):
         grads, var_list = zip(*grads_and_vars)
         if self._variable_optimizers is None:
             self._create_slots(var_list)
+        updates = []
         for i in range(len(grads)):
-            self._apply_dense(grads[i], var_list[i])
-        return self
+            updates.append(self._apply_dense(grads[i], var_list[i]))
+        return tf.group(*updates)
 
     def _apply_dense(self, grad, var):
         with tf.variable_scope(self._name, reuse=True):
