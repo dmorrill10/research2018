@@ -53,6 +53,9 @@ class VariableOptimizer(object):
         self.name = type(self).__name__ if name is None else name
         self._slots = {}
 
+    def variables(self):
+        return self._slots.values()
+
     def num_rows(self):
         return self.shape[0]
 
@@ -145,6 +148,9 @@ class CompositeVariableOptimizer(optimizer.Optimizer):
             type(self).__name__ if name is None else name)
         self._variable_optimizer_factory = variable_optimizer_factory
         self._variable_optimizers = None
+
+    def variables(self):
+        return sum([opt.variables() for opt in self._variable_optimizers], [])
 
     def _create_slots(self, var_list):
         self._variable_optimizers = {}
