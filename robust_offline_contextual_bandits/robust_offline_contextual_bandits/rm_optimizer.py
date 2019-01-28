@@ -190,7 +190,6 @@ class CompositeVariableOptimizer(optimizer.Optimizer):
 class RmOptimizer(CompositeVariableOptimizer):
     def __init__(self,
                  polytope_scales=[],
-                 kernel_initializer=None,
                  grad_initializer=tf.zeros_initializer,
                  ev_initializer=tf.zeros_initializer,
                  **kwargs):
