@@ -29,20 +29,18 @@ def with_fixed_dimensions(t):
 def rm(grad, ev, scale):
     negative_grad = -grad
 
-    independent_directions = ev.shape[0].value > 1
-    if not independent_directions:
+    dependent_directions = ev.shape[0].value < 2
+    if dependent_directions:
         ev = tile_to_dims(ev, grad.shape[0].value)
 
     p = plus(negative_grad - ev)
     d = plus(grad - ev)
 
-    if independent_directions:
-        z = p + d
-    else:
-        sum_p = sum_over_dims(p)
-        sum_d = sum_over_dims(d)
-        z = sum_p + sum_d
+    if dependent_directions:
+        z = sum_over_dims(p) + sum_over_dims(d)
         z = tile_to_dims(z, p.shape[0].value)
+    else:
+        z = p + d
     c = scale / z
     return tf.where(tf.greater(z, 0), c * (p - d), tf.zeros_like(z))
 
@@ -51,7 +49,7 @@ class VariableOptimizer(object):
     def __init__(self, var, use_locking=False, name=None):
         self._var = var
         self._matrix_var = with_fixed_dimensions(var)
-        self.shape = [v.value for v in self._matrix_var.shape]
+        self.shape = tuple(v.value for v in self._matrix_var.shape)
         self._use_locking = use_locking
         self.name = type(self).__name__ if name is None else name
         self._slots = {}
@@ -95,13 +93,10 @@ class GradEvBasedVariableOptimizer(VariableOptimizer):
             grad = self._get_or_make_slot(
                 self._grad_initializer(self.shape), 'cumulative_gradients')
 
-            if self._independent_directions:
-                ev = self._get_or_make_slot(
-                    self._ev_initializer(self.shape), 'cumulative_ev')
-            else:
-                ev = self._get_or_make_slot(
-                    self._ev_initializer([1, self.num_columns()]),
-                    'cumulative_ev')
+            ev_shape = (self.shape if self._independent_directions else
+                        (1, self.num_columns()))
+            ev = self._get_or_make_slot(
+                self._ev_initializer(ev_shape), 'cumulative_ev')
 
             tf.summary.histogram('cumulative_gradients', grad)
             tf.summary.histogram('cumulative_ev', ev)
