@@ -92,15 +92,16 @@ class GradEvBasedVariableOptimizer(VariableOptimizer):
 
     def create_slots(self):
         with self.name_scope():
-            grad = self._get_or_make_slot(self._grad_initializer(self.shape),
-                                          'cumulative_gradients')
+            grad = self._get_or_make_slot(
+                self._grad_initializer(self.shape), 'cumulative_gradients')
 
             if self._independent_directions:
-                ev = self._get_or_make_slot(self._ev_initializer(self.shape),
-                                            'cumulative_ev')
+                ev = self._get_or_make_slot(
+                    self._ev_initializer(self.shape), 'cumulative_ev')
             else:
-                ev = self._get_or_make_slot(self._ev_initializer(
-                    [1, self.num_columns()]), 'cumulative_ev')
+                ev = self._get_or_make_slot(
+                    self._ev_initializer([1, self.num_columns()]),
+                    'cumulative_ev')
 
             tf.summary.histogram('cumulative_gradients', grad)
             tf.summary.histogram('cumulative_ev', ev)
