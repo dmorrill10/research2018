@@ -28,19 +28,22 @@ def with_fixed_dimensions(t):
 
 def rm(grad, ev, scale):
     negative_grad = -grad
-    ev = tile_to_dims(ev, grad.shape[0].value)
+
+    independent_directions = ev.shape[0].value < 2
+    if independent_directions:
+        ev = tile_to_dims(ev, grad.shape[0].value)
 
     p = plus(negative_grad - ev)
     d = plus(grad - ev)
 
-    sum_p = sum_over_dims(p)
-    sum_d = sum_over_dims(d)
-    z = sum_p + sum_d
-    c = tile_to_dims(scale / z, p.shape[0].value)
-    z = tile_to_dims(z, p.shape[0].value)
-
-    p = plus(negative_grad - ev)
-    d = plus(grad - ev)
+    if independent_directions:
+        z = p + d
+    else:
+        sum_p = sum_over_dims(p)
+        sum_d = sum_over_dims(d)
+        z = sum_p + sum_d
+        z = tile_to_dims(z, p.shape[0].value)
+    c = scale / z
     return tf.where(tf.greater(z, 0), c * (p - d), tf.zeros_like(z))
 
 
@@ -80,18 +83,24 @@ class GradEvBasedVariableOptimizer(VariableOptimizer):
                  *args,
                  grad_initializer=tf.zeros_initializer,
                  ev_initializer=tf.zeros_initializer,
+                 independent_directions=False,
                  **kwargs):
         super(GradEvBasedVariableOptimizer, self).__init__(*args, **kwargs)
         self._grad_initializer = grad_initializer
         self._ev_initializer = ev_initializer
+        self._independent_directions = independent_directions
 
     def create_slots(self):
         with self.name_scope():
             grad = self._get_or_make_slot(self._grad_initializer()(self.shape),
                                           'cumulative_gradients')
 
-            ev = self._get_or_make_slot(self._ev_initializer()(
-                [1, self.num_columns()]), 'cumulative_ev')
+            if self._independent_directions:
+                ev = self._get_or_make_slot(self._ev_initializer()(self.shape),
+                                            'cumulative_ev')
+            else:
+                ev = self._get_or_make_slot(self._ev_initializer()(
+                    [1, self.num_columns()]), 'cumulative_ev')
 
             tf.summary.histogram('cumulative_gradients', grad)
             tf.summary.histogram('cumulative_ev', ev)
@@ -102,7 +111,9 @@ class GradEvBasedVariableOptimizer(VariableOptimizer):
             grad if descale else scale * grad, use_locking=self._use_locking)
 
     def updated_ev(self, grad, scale=1.0, descale=True):
-        el = tf.reduce_sum(self._matrix_var * grad, axis=0, keep_dims=True)
+        el = self._matrix_var * grad
+        if not self._independent_directions:
+            el = tf.reduce_sum(el, axis=0, keep_dims=True)
         if descale:
             inst_ev = el / -scale
         else:
@@ -112,7 +123,7 @@ class GradEvBasedVariableOptimizer(VariableOptimizer):
 
 
 class StaticScaleVariableOptimizer(GradEvBasedVariableOptimizer):
-    def __init__(self, scale=1, *args, **kwargs):
+    def __init__(self, *args, scale=1, **kwargs):
         super(StaticScaleVariableOptimizer, self).__init__(*args, **kwargs)
         self._scale = scale
 
@@ -190,14 +201,18 @@ class CompositeVariableOptimizer(optimizer.Optimizer):
 class RmOptimizer(CompositeVariableOptimizer):
     def __init__(self,
                  polytope_scales=[],
+                 independent_directions=[],
                  grad_initializer=tf.zeros_initializer,
                  ev_initializer=tf.zeros_initializer,
                  **kwargs):
         def f(var, i):
             scale = polytope_scales[i]
+            id = (independent_directions[i]
+                  if len(independent_directions) > i else False)
             return RmVariableOptimizer(
-                scale,
                 var,
+                scale=scale,
+                independent_directions=id,
                 grad_initializer=grad_initializer,
                 ev_initializer=ev_initializer,
                 name='RM_layer_{}_s{}'.format(i, scale))
