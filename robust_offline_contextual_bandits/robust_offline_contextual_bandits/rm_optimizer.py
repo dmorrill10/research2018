@@ -29,8 +29,8 @@ def with_fixed_dimensions(t):
 def rm(grad, ev, scale):
     negative_grad = -grad
 
-    independent_directions = ev.shape[0].value < 2
-    if independent_directions:
+    independent_directions = ev.shape[0].value > 1
+    if not independent_directions:
         ev = tile_to_dims(ev, grad.shape[0].value)
 
     p = plus(negative_grad - ev)
