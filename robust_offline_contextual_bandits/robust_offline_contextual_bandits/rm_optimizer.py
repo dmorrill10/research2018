@@ -81,8 +81,8 @@ class VariableOptimizer(object):
 class GradEvBasedVariableOptimizer(VariableOptimizer):
     def __init__(self,
                  *args,
-                 grad_initializer=tf.zeros_initializer,
-                 ev_initializer=tf.zeros_initializer,
+                 grad_initializer=tf.zeros_initializer(),
+                 ev_initializer=tf.zeros_initializer(),
                  independent_directions=False,
                  **kwargs):
         super(GradEvBasedVariableOptimizer, self).__init__(*args, **kwargs)
@@ -92,14 +92,14 @@ class GradEvBasedVariableOptimizer(VariableOptimizer):
 
     def create_slots(self):
         with self.name_scope():
-            grad = self._get_or_make_slot(self._grad_initializer()(self.shape),
+            grad = self._get_or_make_slot(self._grad_initializer(self.shape),
                                           'cumulative_gradients')
 
             if self._independent_directions:
-                ev = self._get_or_make_slot(self._ev_initializer()(self.shape),
+                ev = self._get_or_make_slot(self._ev_initializer(self.shape),
                                             'cumulative_ev')
             else:
-                ev = self._get_or_make_slot(self._ev_initializer()(
+                ev = self._get_or_make_slot(self._ev_initializer(
                     [1, self.num_columns()]), 'cumulative_ev')
 
             tf.summary.histogram('cumulative_gradients', grad)
@@ -202,8 +202,8 @@ class RmOptimizer(CompositeVariableOptimizer):
     def __init__(self,
                  polytope_scales=[],
                  independent_directions=[],
-                 grad_initializer=tf.zeros_initializer,
-                 ev_initializer=tf.zeros_initializer,
+                 grad_initializer=tf.zeros_initializer(),
+                 ev_initializer=tf.zeros_initializer(),
                  **kwargs):
         def f(var, i):
             scale = polytope_scales[i]
