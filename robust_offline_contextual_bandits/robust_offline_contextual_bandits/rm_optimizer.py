@@ -1,3 +1,4 @@
+from inspect import signature
 import tensorflow as tf
 import numpy as np
 from tensorflow.python.training import optimizer
@@ -26,23 +27,28 @@ def with_fixed_dimensions(t):
         return t
 
 
-def rm(grad, ev, scale):
+def rm(grad, ev, scale, non_negative=False):
     negative_grad = -grad
 
     dependent_directions = ev.shape[0].value < 2
-    if dependent_directions:
-        ev = tile_to_dims(ev, grad.shape[0].value)
+    if dependent_directions: ev = tile_to_dims(ev, grad.shape[0].value)
 
     p = plus(negative_grad - ev)
-    d = plus(grad - ev)
+
+    allow_negative = not non_negative
+    if allow_negative: d = plus(grad - ev)
 
     if dependent_directions:
-        z = sum_over_dims(p) + sum_over_dims(d)
+        z = sum_over_dims(p)
+        if allow_negative: z += sum_over_dims(d)
         z = tile_to_dims(z, p.shape[0].value)
     else:
-        z = p + d
+        z = p
+        if allow_negative: z += d
+    delta = p
+    if allow_negative: delta -= d
     c = scale / z
-    return tf.where(tf.greater(z, 0), c * (p - d), tf.zeros_like(z))
+    return tf.where(tf.greater(z, 0), c * delta, tf.zeros_like(z))
 
 
 class VariableOptimizer(object):
@@ -87,8 +93,9 @@ class GradEvBasedVariableOptimizer(VariableOptimizer):
         self._grad_initializer = grad_initializer
         self._ev_initializer = ev_initializer
         self._independent_directions = independent_directions
+        self.initializer = self._create_slots()
 
-    def create_slots(self):
+    def _create_slots(self):
         with self.name_scope():
             grad = self._get_or_make_slot(
                 self._grad_initializer(self.shape), 'cumulative_gradients')
@@ -132,52 +139,92 @@ class RmVariableOptimizerMixin(object):
         ev = self.updated_ev(grad, self.scales())
         grad = self.updated_grad(grad, self.scales())
         next_var = self._var.assign(
-            tf.reshape(rm(grad, ev, self.scales()), self._var.shape),
+            tf.reshape(self.rm(grad, ev, self.scales()), self._var.shape),
             use_locking=self._use_locking)
         return tf.group(next_var, grad, ev)
 
     def sparse_update(self, grad):
         return self.dense_update(grad)
 
+    def rm(self, grad, ev, scale):
+        return rm(grad, ev, scale)
 
-class RmVariableOptimizer(RmVariableOptimizerMixin,
-                          StaticScaleVariableOptimizer):
-    pass
+
+class RmSimVariableOptimizerMixin(RmVariableOptimizerMixin):
+    def rm(self, grad, ev, scale):
+        return rm(grad, ev, scale, non_negative=True)
+
+
+class RmNnVariableOptimizerMixin(RmVariableOptimizerMixin):
+    def rm(self, grad, ev, scale):
+        return rm(grad, ev, scale, non_negative=True)
+
+
+class RmL1VariableOptimizer(RmVariableOptimizerMixin,
+                            StaticScaleVariableOptimizer):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, independent_directions=False, **kwargs)
+
+
+class RmInfVariableOptimizer(RmVariableOptimizerMixin,
+                             StaticScaleVariableOptimizer):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, independent_directions=True, **kwargs)
+
+
+class RmSimVariableOptimizer(RmSimVariableOptimizerMixin,
+                             StaticScaleVariableOptimizer):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, independent_directions=False, **kwargs)
+
+
+class RmNnVariableOptimizer(RmNnVariableOptimizerMixin,
+                            StaticScaleVariableOptimizer):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, independent_directions=True, **kwargs)
 
 
 class CompositeVariableOptimizer(optimizer.Optimizer):
+    @classmethod
+    def combine(cls, *new_variable_optimizer, **kwargs):
+        return cls(lambda var, i: new_variable_optimizer[i](var), **kwargs)
+
     def __init__(self,
-                 variable_optimizer_factory,
+                 new_variable_optimizer,
                  use_locking=False,
-                 name=None):
+                 name=None,
+                 var_list=[]):
         super(CompositeVariableOptimizer, self).__init__(
             use_locking,
             type(self).__name__ if name is None else name)
-        self._variable_optimizer_factory = variable_optimizer_factory
-        self._variable_optimizers = None
+        self._new_opt = new_variable_optimizer
+        self._optimizers = None
+        self.initializer = None
+        if len(var_list) > 0:
+            self._create_slots(var_list)
 
     def variables(self):
-        return sum([
-            list(opt.variables())
-            for opt in self._variable_optimizers.values()
-        ], [])
+        return sum(
+            [list(opt.variables()) for opt in self._optimizers.values()], [])
 
     def _create_slots(self, var_list):
-        self._variable_optimizers = {}
-        initializers = []
-        with tf.variable_scope(self._name):
-            for i in range(len(var_list)):
-                var = var_list[i]
-                self._variable_optimizers[
-                    var] = self._variable_optimizer_factory(var, i)
-                initializers.append(
-                    self._variable_optimizers[var].create_slots())
-        return tf.group(*initializers)
+        if self._optimizers is None:
+            self._optimizers = {}
+            initializers = []
+            pass_i = (len(
+                signature(self._new_opt, follow_wrapped=False).parameters) > 1)
+            with tf.variable_scope(self._name):
+                for i in range(len(var_list)):
+                    var = var_list[i]
+                    self._optimizers[var] = (self._new_opt(var, i)
+                                             if pass_i else self._new_opt(var))
+                    initializers.append(self._optimizers[var].initializer)
+                self.initializer = tf.group(*initializers)
+        return self.initializer
 
     def apply_gradients(self, grads_and_vars, global_step=None, name=None):
         grads, var_list = zip(*grads_and_vars)
-        if self._variable_optimizers is None:
-            self._create_slots(var_list)
+        if self._optimizers is None: self._create_slots(var_list)
         updates = []
         for i in range(len(grads)):
             updates.append(self._apply_dense(grads[i], var_list[i]))
@@ -185,32 +232,10 @@ class CompositeVariableOptimizer(optimizer.Optimizer):
 
     def _apply_dense(self, grad, var):
         with tf.variable_scope(self._name, reuse=True):
-            return self._variable_optimizers[var].dense_update(
+            return self._optimizers[var].dense_update(
                 with_fixed_dimensions(grad))
 
     def _apply_sparse(self, grad, var):
         with tf.variable_scope(self._name, reuse=True):
-            return self._variable_optimizers[var].sparse_update(
+            return self._optimizers[var].sparse_update(
                 with_fixed_dimensions(grad))
-
-
-class RmOptimizer(CompositeVariableOptimizer):
-    def __init__(self,
-                 polytope_scales=[],
-                 independent_directions=[],
-                 grad_initializer=tf.zeros_initializer(),
-                 ev_initializer=tf.zeros_initializer(),
-                 **kwargs):
-        def f(var, i):
-            scale = polytope_scales[i]
-            id = (independent_directions[i]
-                  if len(independent_directions) > i else False)
-            return RmVariableOptimizer(
-                var,
-                scale=scale,
-                independent_directions=id,
-                grad_initializer=grad_initializer,
-                ev_initializer=ev_initializer,
-                name='RM_layer_{}_s{}'.format(i, scale))
-
-        super(RmOptimizer, self).__init__(f, **kwargs)
