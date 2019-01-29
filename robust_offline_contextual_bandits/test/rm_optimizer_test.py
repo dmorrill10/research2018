@@ -14,6 +14,24 @@ class RmOptimizerTest(tf.test.TestCase):
         np.random.seed(42)
         tf.set_random_seed(42)
 
+    def test_linear_single_output_independent_directions(self):
+        num_dimensions = 2
+        num_players = 1
+        max_value = 0.5
+
+        w = ResourceVariable(tf.zeros([num_dimensions, num_players]))
+
+        loss = tf.reduce_mean(w + max_value)
+        optimizer = RmOptimizer(polytope_scales=[max_value], independent_directions=[True])
+
+        self.assertEqual(max_value, loss.numpy())
+        with tf.GradientTape() as tape:
+            loss = tf.reduce_mean(w + max_value)
+        grad = tape.gradient(loss, [w])
+        optimizer.apply_gradients(zip(grad, [w]))
+        loss = tf.reduce_mean(w + max_value)
+        self.assertEqual(0.0, loss.numpy())
+
     def test_linear_single_output(self):
         num_dimensions = 2
         num_players = 1
