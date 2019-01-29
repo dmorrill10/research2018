@@ -27,16 +27,14 @@ def with_fixed_dimensions(t):
         return t
 
 
-def rm(grad, ev, scale, non_negative=False):
-    negative_grad = -grad
-
+def rm(utility, ev, scale, non_negative=False):
     dependent_directions = ev.shape[0].value < 2
-    if dependent_directions: ev = tile_to_dims(ev, grad.shape[0].value)
+    if dependent_directions: ev = tile_to_dims(ev, utility.shape[0].value)
 
-    p = plus(negative_grad - ev)
+    p = plus(utility - ev)
 
     allow_negative = not non_negative
-    if allow_negative: d = plus(grad - ev)
+    if allow_negative: d = plus(-utility - ev)
 
     if dependent_directions:
         z = sum_over_dims(p)
@@ -81,48 +79,51 @@ class VariableOptimizer(object):
     def name_scope(self):
         return tf.name_scope(self.name + '/')
 
+    def sparse_update(self, grad):
+        return self.dense_update(grad)
+
 
 class GradEvBasedVariableOptimizer(VariableOptimizer):
     def __init__(self,
                  *args,
-                 grad_initializer=tf.zeros_initializer(),
+                 utility_initializer=tf.zeros_initializer(),
                  ev_initializer=tf.zeros_initializer(),
                  independent_directions=False,
                  **kwargs):
         super(GradEvBasedVariableOptimizer, self).__init__(*args, **kwargs)
-        self._grad_initializer = grad_initializer
+        self._utility_initializer = utility_initializer
         self._ev_initializer = ev_initializer
         self._independent_directions = independent_directions
-        self.initializer = self._create_slots()
+        with self.name_scope():
+            self.initializer = self._create_slots()
 
     def _create_slots(self):
-        with self.name_scope():
-            grad = self._get_or_make_slot(
-                self._grad_initializer(self.shape), 'cumulative_gradients')
+        utility = self._get_or_make_slot(
+            self._utility_initializer(self.shape), 'cumulative_utility')
 
-            ev_shape = (self.shape if self._independent_directions else
-                        (1, self.num_columns()))
-            ev = self._get_or_make_slot(
-                self._ev_initializer(ev_shape), 'cumulative_ev')
+        ev_shape = (self.shape if self._independent_directions else
+                    (1, self.num_columns()))
+        ev = self._get_or_make_slot(
+            self._ev_initializer(ev_shape), 'cumulative_ev')
 
-            tf.summary.histogram('cumulative_gradients', grad)
-            tf.summary.histogram('cumulative_ev', ev)
-        return tf.group(grad.initializer, ev.initializer)
+        tf.summary.histogram('cumulative_utility', utility)
+        tf.summary.histogram('cumulative_ev', ev)
+        return tf.group(utility.initializer, ev.initializer)
 
-    def updated_grad(self, grad, scale=1.0, descale=True):
-        return self.get_slot('cumulative_gradients').assign_add(
-            grad if descale else scale * grad, use_locking=self._use_locking)
+    def utility(self, grad):
+        return -grad
 
-    def updated_ev(self, grad, scale=1.0, descale=True):
-        el = self._matrix_var * grad
+    def updated_utility(self, utility, scale=1.0, descale=True):
+        return self.get_slot('cumulative_utility').assign_add(
+            utility if descale else scale * utility,
+            use_locking=self._use_locking)
+
+    def updated_ev(self, utility, scale=1.0, descale=True):
+        el = self._matrix_var * utility
         if not self._independent_directions:
             el = tf.reduce_sum(el, axis=0, keep_dims=True)
-        if descale:
-            inst_ev = el / -scale
-        else:
-            inst_ev = -el
         return self.get_slot('cumulative_ev').assign_add(
-            inst_ev, use_locking=self._use_locking)
+            el / scale if descale else el, use_locking=self._use_locking)
 
 
 class StaticScaleVariableOptimizer(GradEvBasedVariableOptimizer):
@@ -134,52 +135,46 @@ class StaticScaleVariableOptimizer(GradEvBasedVariableOptimizer):
         return self._scale
 
 
-class RmVariableOptimizerMixin(object):
+class RmMixin(object):
     def dense_update(self, grad):
-        ev = self.updated_ev(grad, self.scales())
-        grad = self.updated_grad(grad, self.scales())
+        utility = self.utility(grad)
+        ev = self.updated_ev(utility, self.scales())
+        utility = self.updated_utility(utility, self.scales())
         next_var = self._var.assign(
-            tf.reshape(self.rm(grad, ev, self.scales()), self._var.shape),
+            tf.reshape(self.rm(utility, ev), self._var.shape),
             use_locking=self._use_locking)
-        return tf.group(next_var, grad, ev)
+        return tf.group(next_var, utility, ev)
 
-    def sparse_update(self, grad):
-        return self.dense_update(grad)
-
-    def rm(self, grad, ev, scale):
-        return rm(grad, ev, scale)
+    def rm(self, utility, ev):
+        return rm(utility, ev, self.scales())
 
 
-class RmSimVariableOptimizerMixin(RmVariableOptimizerMixin):
-    def rm(self, grad, ev, scale):
-        return rm(grad, ev, scale, non_negative=True)
+class RmSimMixin(RmMixin):
+    def rm(self, utility, ev):
+        return rm(utility, ev, self.scales(), non_negative=True)
 
 
-class RmNnVariableOptimizerMixin(RmVariableOptimizerMixin):
-    def rm(self, grad, ev, scale):
-        return rm(grad, ev, scale, non_negative=True)
+class RmNnMixin(RmMixin):
+    def rm(self, utility, ev):
+        return rm(utility, ev, self.scales(), non_negative=True)
 
 
-class RmL1VariableOptimizer(RmVariableOptimizerMixin,
-                            StaticScaleVariableOptimizer):
+class RmL1VariableOptimizer(RmMixin, StaticScaleVariableOptimizer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, independent_directions=False, **kwargs)
 
 
-class RmInfVariableOptimizer(RmVariableOptimizerMixin,
-                             StaticScaleVariableOptimizer):
+class RmInfVariableOptimizer(RmMixin, StaticScaleVariableOptimizer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, independent_directions=True, **kwargs)
 
 
-class RmSimVariableOptimizer(RmSimVariableOptimizerMixin,
-                             StaticScaleVariableOptimizer):
+class RmSimVariableOptimizer(RmSimMixin, StaticScaleVariableOptimizer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, independent_directions=False, **kwargs)
 
 
-class RmNnVariableOptimizer(RmNnVariableOptimizerMixin,
-                            StaticScaleVariableOptimizer):
+class RmNnVariableOptimizer(RmNnMixin, StaticScaleVariableOptimizer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, independent_directions=True, **kwargs)
 
