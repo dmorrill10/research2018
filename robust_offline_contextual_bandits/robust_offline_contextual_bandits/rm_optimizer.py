@@ -89,11 +89,13 @@ class GradEvBasedVariableOptimizer(VariableOptimizer):
                  utility_initializer=tf.zeros_initializer(),
                  ev_initializer=tf.zeros_initializer(),
                  independent_directions=False,
+                 momentum=0.0,
                  **kwargs):
         super(GradEvBasedVariableOptimizer, self).__init__(*args, **kwargs)
         self._utility_initializer = utility_initializer
         self._ev_initializer = ev_initializer
         self._independent_directions = independent_directions
+        self._momentum = momentum
         with self.name_scope():
             self.initializer = self._create_slots()
 
@@ -111,7 +113,7 @@ class GradEvBasedVariableOptimizer(VariableOptimizer):
         return tf.group(utility.initializer, ev.initializer)
 
     def utility(self, grad):
-        return -grad
+        return -grad + self._momentum * self.get_slot('cumulative_utility')
 
     def updated_utility(self, utility, scale=1.0, descale=True):
         return self.get_slot('cumulative_utility').assign_add(
