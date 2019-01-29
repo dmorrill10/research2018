@@ -59,7 +59,7 @@ class VariableOptimizer(object):
         self._slots = {}
 
     def variables(self):
-        return self._slots.values()
+        return list(zip(*sorted(self._slots.items(), key=lambda e: e[0])))[-1]
 
     def num_rows(self):
         return self.shape[0]
@@ -181,7 +181,7 @@ class RmNnVariableOptimizer(RmNnMixin, StaticScaleVariableOptimizer):
         super().__init__(*args, independent_directions=True, **kwargs)
 
 
-class CompositeVariableOptimizer(optimizer.Optimizer):
+class CompositeOptimizer(optimizer.Optimizer):
     @classmethod
     def combine(cls, *new_variable_optimizer, **kwargs):
         return cls(lambda var, i: new_variable_optimizer[i](var), **kwargs)
@@ -191,9 +191,9 @@ class CompositeVariableOptimizer(optimizer.Optimizer):
                  use_locking=False,
                  name=None,
                  var_list=[]):
-        super(CompositeVariableOptimizer, self).__init__(
-            use_locking,
-            type(self).__name__ if name is None else name)
+        super(CompositeOptimizer, self).__init__(use_locking,
+                                                 type(self).__name__
+                                                 if name is None else name)
         self._new_opt = new_variable_optimizer
         self._optimizers = None
         self.initializer = None
@@ -201,21 +201,20 @@ class CompositeVariableOptimizer(optimizer.Optimizer):
             self._create_slots(var_list)
 
     def variables(self):
-        return sum(
-            [list(opt.variables()) for opt in self._optimizers.values()], [])
+        return sum([list(opt.variables()) for opt in self._optimizers], [])
 
     def _create_slots(self, var_list):
         if self._optimizers is None:
-            self._optimizers = {}
+            self._optimizers = []
             initializers = []
             pass_i = (len(
                 signature(self._new_opt, follow_wrapped=False).parameters) > 1)
             with tf.variable_scope(self._name):
                 for i in range(len(var_list)):
                     var = var_list[i]
-                    self._optimizers[var] = (self._new_opt(var, i)
-                                             if pass_i else self._new_opt(var))
-                    initializers.append(self._optimizers[var].initializer)
+                    self._optimizers.append((self._new_opt(var, i) if pass_i
+                                             else self._new_opt(var)))
+                    initializers.append(self._optimizers[-1].initializer)
                 self.initializer = tf.group(*initializers)
         return self.initializer
 
@@ -224,15 +223,10 @@ class CompositeVariableOptimizer(optimizer.Optimizer):
         if self._optimizers is None: self._create_slots(var_list)
         updates = []
         for i in range(len(grads)):
-            updates.append(self._apply_dense(grads[i], var_list[i]))
+            updates.append(
+                self._apply_gradients(self._optimizers[i], grads[i]))
         return tf.group(*updates)
 
-    def _apply_dense(self, grad, var):
+    def _apply_gradients(self, optimizer, grad):
         with tf.variable_scope(self._name, reuse=True):
-            return self._optimizers[var].dense_update(
-                with_fixed_dimensions(grad))
-
-    def _apply_sparse(self, grad, var):
-        with tf.variable_scope(self._name, reuse=True):
-            return self._optimizers[var].sparse_update(
-                with_fixed_dimensions(grad))
+            return optimizer.dense_update(with_fixed_dimensions(grad))

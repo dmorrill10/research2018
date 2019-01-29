@@ -6,7 +6,7 @@ except:
 from tensorflow.python.ops.resource_variable_ops import ResourceVariable
 import numpy as np
 from robust_offline_contextual_bandits.rm_optimizer import \
-    CompositeVariableOptimizer, \
+    CompositeOptimizer, \
     RmL1VariableOptimizer, \
     RmInfVariableOptimizer, \
     RmSimVariableOptimizer
@@ -34,7 +34,7 @@ class RmOptimizerTest(tf.test.TestCase):
         w = ResourceVariable(tf.zeros([num_dimensions, num_players]))
 
         loss = tf.losses.mean_squared_error(y, tf.matmul(x, w))
-        optimizer = CompositeVariableOptimizer(
+        optimizer = CompositeOptimizer(
             lambda var: RmSimVariableOptimizer(var, scale=1))
 
         self.assertEqual(0.0, tf.reduce_sum(tf.abs(w)).numpy())
@@ -56,7 +56,7 @@ class RmOptimizerTest(tf.test.TestCase):
         w = ResourceVariable(tf.zeros([num_dimensions, num_players]))
 
         loss = tf.reduce_mean(w + max_value)
-        optimizer = CompositeVariableOptimizer(
+        optimizer = CompositeOptimizer(
             lambda var: RmInfVariableOptimizer(var, scale=max_value))
 
         self.assertEqual(max_value, loss.numpy())
@@ -84,7 +84,7 @@ class RmOptimizerTest(tf.test.TestCase):
         w = ResourceVariable(tf.zeros([num_dimensions, num_players]))
 
         loss = tf.losses.mean_squared_error(y, tf.matmul(x, w))
-        optimizer = CompositeVariableOptimizer(
+        optimizer = CompositeOptimizer(
             lambda var: RmL1VariableOptimizer(var, scale=1))
 
         self.assertEqual(0.0, tf.reduce_sum(tf.abs(w)).numpy())
@@ -115,7 +115,7 @@ class RmOptimizerTest(tf.test.TestCase):
         w = ResourceVariable(tf.zeros([num_dimensions, num_players]))
 
         loss = tf.losses.mean_squared_error(y, tf.matmul(x, w))
-        optimizer = CompositeVariableOptimizer(
+        optimizer = CompositeOptimizer(
             lambda var: RmL1VariableOptimizer(var, scale=1))
 
         self.assertEqual(0.0, tf.reduce_sum(tf.abs(w)).numpy())
