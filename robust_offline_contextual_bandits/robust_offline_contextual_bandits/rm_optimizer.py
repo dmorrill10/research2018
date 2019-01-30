@@ -46,7 +46,12 @@ def rm(utility, ev, scale, non_negative=False):
     delta = p
     if allow_negative: delta -= d
     c = scale / z
-    return tf.where(tf.greater(z, 0), c * delta, tf.zeros_like(z))
+    if allow_negative:
+        default = tf.zeros_like(z)
+    else:
+        denom = max(p.shape[0].value, 2) if dependent_directions else 2.0
+        default = tf.fill(z.shape, 1.0 / denom)
+    return tf.where(tf.greater(z, 0), c * delta, default)
 
 
 class VariableOptimizer(object):
