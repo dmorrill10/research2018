@@ -116,7 +116,7 @@ class RmOptimizerTest(tf.test.TestCase):
 
         loss = tf.losses.mean_squared_error(y, tf.matmul(x, w))
         optimizer = CompositeOptimizer(
-            lambda var: RmL1VariableOptimizer(var, scale=1))
+            lambda var: RmL1VariableOptimizer(var, scale=1.0), var_list=[w])
 
         self.assertEqual(0.0, tf.reduce_sum(tf.abs(w)).numpy())
         self.assertAlmostEqual(0.86844116, loss.numpy(), places=7)
