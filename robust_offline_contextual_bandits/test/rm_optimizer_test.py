@@ -9,13 +9,35 @@ from robust_offline_contextual_bandits.rm_optimizer import \
     CompositeOptimizer, \
     RmL1VariableOptimizer, \
     RmInfVariableOptimizer, \
-    RmSimVariableOptimizer
+    RmSimVariableOptimizer, \
+    RmNnVariableOptimizer
 
 
 class RmOptimizerTest(tf.test.TestCase):
     def setUp(self):
         np.random.seed(42)
         tf.set_random_seed(42)
+
+    def test_nn_two_column_weights_only(self):
+        num_dimensions = 3
+        num_players = 2
+
+        w = ResourceVariable(tf.zeros([num_dimensions, num_players]))
+
+        y = 0.1
+
+        loss = tf.losses.mean_squared_error(tf.fill(w.shape, y), w)
+        optimizer = CompositeOptimizer(
+            lambda var: RmNnVariableOptimizer(var, scale=1.0))
+
+        self.assertAlmostEqual(y * y, loss.numpy())
+        for i in range(20):
+            with tf.GradientTape() as tape:
+                loss = tf.losses.mean_squared_error(tf.fill(w.shape, y), w)
+            grad = tape.gradient(loss, [w])
+            optimizer.apply_gradients(zip(grad, [w]))
+        loss = tf.losses.mean_squared_error(tf.fill(w.shape, y), w)
+        self.assertAlmostEquals(0.0, loss.numpy())
 
     def test_sim_linear_single_output(self):
         num_dimensions = 2

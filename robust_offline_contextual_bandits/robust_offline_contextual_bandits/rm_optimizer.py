@@ -38,22 +38,27 @@ def rm(utility,
        scale=1.0,
        non_negative=False,
        relax_simplex_constraint=False):
-    if relax_simplex_constraint: ev = plus(ev)
-    p = plus(utility - ev)
-
     allow_negative = not non_negative
+
+    p = plus(utility - ev)
     if allow_negative: d = plus(-utility - ev)
 
     z = sum_over_dims(p)
     if allow_negative: z += sum_over_dims(d)
     z = tile_to_dims(z, p.shape[0].value)
 
+    if relax_simplex_constraint:
+        ev = plus(ev)
+        p = plus(utility - ev)
+        if allow_negative: d = plus(-utility - ev)
+
     delta = p
     if allow_negative: delta -= d
+
     c = scale / z
     default = (
-        tf.zeros_like(z) if allow_negative
-        else tf.fill(z.shape, 1.0 / max(p.shape[0].value, 2))
+        tf.zeros_like(z) if allow_negative or p.shape[0].value < 2
+        else tf.fill(z.shape, 1.0 / p.shape[0].value)
     )  # yapf:disable
     return tf.where(tf.greater(z, 0), c * delta, default)
 
@@ -71,10 +76,13 @@ class VariableOptimizer(object):
         self.name = type(self).__name__ if name is None else name
         self._slots = {}
 
+    def _with_fixed_dimensions(self, v):
+        return with_fixed_dimensions(
+            v, independent_dimensions=self._independent_dimensions)
+
     @property
     def _matrix_var(self):
-        return with_fixed_dimensions(
-            self._var, independent_dimensions=self._independent_dimensions)
+        return self._with_fixed_dimensions(self._var)
 
     def variables(self):
         return list(zip(*sorted(self._slots.items(), key=lambda e: e[0])))[-1]
@@ -127,14 +135,12 @@ class GradEvBasedVariableOptimizer(VariableOptimizer):
 
     def utility(self, grad, scale=1.0, descale=True):
         m = self._momentum * self.get_slot('avg_utility')
-        if not descale:
-            m = m / scale
+        if not descale: m = m / scale
         return -grad + m
 
     def updated_utility(self, utility, scale=1.0, descale=True, num_updates=0):
         cu = self.get_slot('avg_utility')
-        if not descale:
-            utility = scale * utility
+        if not descale: utility = scale * utility
         return cu.assign_add(
             (utility - cu) / tf.cast(num_updates + 1, tf.float32),
             use_locking=self._use_locking)
@@ -142,8 +148,7 @@ class GradEvBasedVariableOptimizer(VariableOptimizer):
     def updated_ev(self, utility, scale=1.0, descale=True, num_updates=0):
         ev = self.get_slot('avg_ev')
         iev = tf.reduce_sum(self._matrix_var * utility, axis=0, keep_dims=True)
-        if descale:
-            iev = iev / scale
+        if descale: iev = iev / scale
         return ev.assign_add(
             (iev - ev) / tf.cast(num_updates + 1, tf.float32),
             use_locking=self._use_locking)
@@ -165,12 +170,14 @@ class RmMixin(object):
                                           or relax_simplex_constraint)
 
     def dense_update(self, grad, num_updates=0):
+        grad = self._with_fixed_dimensions(grad)
         utility = self.utility(grad, scale=self.scales())
         ev = self.updated_ev(
             utility, scale=self.scales(), num_updates=num_updates)
 
         utility = self.updated_utility(
             utility, scale=self.scales(), num_updates=num_updates)
+
         next_var = self._var.assign(
             tf.reshape(self.rm(utility, ev), self._var.shape),
             use_locking=self._use_locking)
@@ -262,5 +269,4 @@ class CompositeOptimizer(optimizer.Optimizer):
 
     def _apply_gradients(self, optimizer, grad):
         with tf.variable_scope(self._name, reuse=True):
-            return optimizer.dense_update(
-                with_fixed_dimensions(grad), self._num_updates)
+            return optimizer.dense_update(grad, self._num_updates)
