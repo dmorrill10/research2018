@@ -199,6 +199,10 @@ class RmMixin(object):
 
 
 class MaxAbsRegretRegularization(object):
+    def __init__(self, *args, regularization_weight=1.0, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._regularization_weight = regularization_weight
+
     def _create_slots(self):
         init = super()._create_slots()
         max_abs_regret = self._get_or_make_slot(
@@ -239,7 +243,9 @@ class MaxAbsRegretRegularization(object):
         max_abs_regret = max_abs_regret.assign(
             tf.maximum(max_abs_regret, iabs_regret),
             use_locking=self._use_locking)
-        z = z + tf.square(self.scales()) * max_abs_regret / t
+        scaled_max_abs_regret = (tf.square(self.scales()) * (
+            self._regularization_weight / t) * max_abs_regret)
+        z = z + scaled_max_abs_regret
 
         if self._relax_simplex_constraint:
             avg_ev = plus(avg_ev)
