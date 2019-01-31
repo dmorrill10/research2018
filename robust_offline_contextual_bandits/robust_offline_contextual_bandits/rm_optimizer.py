@@ -166,8 +166,7 @@ class StaticScaleVariableOptimizer(GradEvBasedVariableOptimizer):
 class RmMixin(object):
     def __init__(self, *args, relax_simplex_constraint=False, **kwargs):
         super().__init__(*args, **kwargs)
-        self._relax_simplex_constraint = (self.num_rows() < 2
-                                          or relax_simplex_constraint)
+        self._relax_simplex_constraint = relax_simplex_constraint
 
     def dense_update(self, grad, num_updates=0):
         grad = self._with_fixed_dimensions(grad)
@@ -213,7 +212,11 @@ class RmInfVariableOptimizer(RmMixin, StaticScaleVariableOptimizer):
 
 class RmNnVariableOptimizer(RmSimMixin, StaticScaleVariableOptimizer):
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, independent_dimensions=True, **kwargs)
+        super().__init__(
+            *args,
+            independent_dimensions=True,
+            relax_simplex_constraint=True,
+            **kwargs)
 
 
 class CompositeOptimizer(optimizer.Optimizer):
