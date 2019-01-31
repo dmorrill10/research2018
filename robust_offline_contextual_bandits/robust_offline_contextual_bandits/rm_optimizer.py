@@ -144,20 +144,16 @@ class GradEvBasedVariableOptimizer(VariableOptimizer):
                 tf.sign(grad) * self._clipvalue, grad)
         return -grad + m
 
-    def updated_utility(self, utility, scale=1.0, descale=True, num_updates=0):
+    def updated_utility(self, utility, scale=1.0, descale=True, t=1):
         cu = self.get_slot('avg_utility')
         if not descale: utility = scale * utility
-        return cu.assign_add(
-            (utility - cu) / tf.cast(num_updates + 1, tf.float32),
-            use_locking=self._use_locking)
+        return cu.assign_add((utility - cu) / t, use_locking=self._use_locking)
 
-    def updated_ev(self, utility, scale=1.0, descale=True, num_updates=0):
+    def updated_ev(self, utility, scale=1.0, descale=True, t=1):
         ev = self.get_slot('avg_ev')
         iev = tf.reduce_sum(self._matrix_var * utility, axis=0, keep_dims=True)
         if descale: iev = iev / scale
-        return ev.assign_add(
-            (iev - ev) / tf.cast(num_updates + 1, tf.float32),
-            use_locking=self._use_locking)
+        return ev.assign_add((iev - ev) / t, use_locking=self._use_locking)
 
 
 class StaticScaleVariableOptimizer(GradEvBasedVariableOptimizer):
@@ -174,14 +170,17 @@ class RmMixin(object):
         super().__init__(*args, **kwargs)
         self._relax_simplex_constraint = relax_simplex_constraint
 
+    @property
+    def non_negative(self):
+        return False
+
     def dense_update(self, grad, num_updates=0):
         grad = self._with_fixed_dimensions(grad)
         utility = self.utility(grad, scale=self.scales())
-        ev = self.updated_ev(
-            utility, scale=self.scales(), num_updates=num_updates)
 
-        utility = self.updated_utility(
-            utility, scale=self.scales(), num_updates=num_updates)
+        t = tf.cast(num_updates + 1, tf.float32)
+        ev = self.updated_ev(utility, scale=self.scales(), t=t)
+        utility = self.updated_utility(utility, scale=self.scales(), t=t)
 
         next_var = self._var.assign(
             tf.reshape(self.rm(utility, ev), self._var.shape),
@@ -195,12 +194,80 @@ class RmMixin(object):
             ev,
             scale=self.scales(),
             relax_simplex_constraint=self._relax_simplex_constraint,
+            non_negative=self.non_negative,
             **kwargs)
 
 
+class MaxAbsRegretRegularization(object):
+    def _create_slots(self):
+        init = super()._create_slots()
+        max_abs_regret = self._get_or_make_slot(
+            tf.zeros(self.shape), 'max_abs_regret')
+
+        tf.summary.histogram('max_abs_regret', max_abs_regret)
+        return tf.group(max_abs_regret.initializer, init)
+
+    def dense_update(self, grad, num_updates=0):
+        grad = self._with_fixed_dimensions(grad)
+        iutility = self.utility(grad, scale=self.scales())
+
+        avg_ev = self.get_slot('avg_ev')
+        iev = tf.reduce_sum(
+            self._matrix_var * iutility, axis=0, keep_dims=True)
+        iev = iev / self.scales()
+
+        iabs_regret = tf.abs(iutility - iev)
+        allow_negative = not self.non_negative
+        if allow_negative:
+            iabs_regret = tf.maximum(iabs_regret, tf.abs(grad - iev))
+
+        t = tf.cast(num_updates + 1, tf.float32)
+        avg_ev = avg_ev.assign_add(
+            (iev - avg_ev) / t, use_locking=self._use_locking)
+
+        avg_utility = self.get_slot('avg_utility')
+        avg_utility = avg_utility.assign_add(
+            (iutility - avg_utility) / t, use_locking=self._use_locking)
+
+        p = plus(avg_utility - avg_ev)
+        if allow_negative: d = plus(-avg_utility - avg_ev)
+
+        z = sum_over_dims(p)
+        if allow_negative: z += sum_over_dims(d)
+
+        max_abs_regret = self.get_slot('max_abs_regret')
+        max_abs_regret = max_abs_regret.assign(
+            tf.maximum(max_abs_regret, iabs_regret),
+            use_locking=self._use_locking)
+        z = z + tf.square(self.scales()) * max_abs_regret / t
+
+        if self._relax_simplex_constraint:
+            avg_ev = plus(avg_ev)
+            p = plus(avg_utility - avg_ev)
+            if allow_negative: d = plus(-avg_utility - avg_ev)
+
+        delta = p
+        if allow_negative: delta -= d
+
+        c = self.scales() / z
+        default = (
+            tf.zeros_like(z) if allow_negative or p.shape[0].value < 2
+            else tf.fill(z.shape, 1.0 / p.shape[0].value)
+        )  # yapf:disable
+
+        next_var = self._var.assign(
+            tf.reshape(
+                tf.where(tf.greater(z, 0), c * delta, default),
+                self._var.shape),
+            use_locking=self._use_locking)
+
+        return tf.group(next_var, avg_utility, avg_ev, max_abs_regret)
+
+
 class RmSimMixin(RmMixin):
-    def rm(self, *args):
-        return super().rm(*args, non_negative=True)
+    @property
+    def non_negative(self):
+        return True
 
 
 class RmL1VariableOptimizer(RmMixin, StaticScaleVariableOptimizer):
@@ -217,6 +284,32 @@ class RmInfVariableOptimizer(RmMixin, StaticScaleVariableOptimizer):
 
 
 class RmNnVariableOptimizer(RmSimMixin, StaticScaleVariableOptimizer):
+    def __init__(self, *args, **kwargs):
+        super().__init__(
+            *args,
+            independent_dimensions=True,
+            relax_simplex_constraint=True,
+            **kwargs)
+
+
+class RmL1MarrVariableOptimizer(MaxAbsRegretRegularization, RmMixin,
+                                StaticScaleVariableOptimizer):
+    pass
+
+
+class RmSimMarrVariableOptimizer(MaxAbsRegretRegularization, RmSimMixin,
+                                 StaticScaleVariableOptimizer):
+    pass
+
+
+class RmInfMarrVariableOptimizer(MaxAbsRegretRegularization, RmMixin,
+                                 StaticScaleVariableOptimizer):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, independent_dimensions=True, **kwargs)
+
+
+class RmNnMarrVariableOptimizer(MaxAbsRegretRegularization, RmSimMixin,
+                                StaticScaleVariableOptimizer):
     def __init__(self, *args, **kwargs):
         super().__init__(
             *args,

@@ -10,13 +10,61 @@ from robust_offline_contextual_bandits.rm_optimizer import \
     RmL1VariableOptimizer, \
     RmInfVariableOptimizer, \
     RmSimVariableOptimizer, \
-    RmNnVariableOptimizer
+    RmNnVariableOptimizer, \
+    RmL1MarrVariableOptimizer
 
 
 class RmOptimizerTest(tf.test.TestCase):
     def setUp(self):
         np.random.seed(42)
         tf.set_random_seed(42)
+
+    def test_l1_marr_linear_multiple_outputs(self):
+        num_dimensions = 2
+        num_players = 5
+        num_examples = 10
+
+        x = np.concatenate(
+            [
+                np.random.normal(size=[num_examples, num_dimensions - 1]),
+                np.ones([num_examples, 1])
+            ],
+            axis=1).astype('float32')
+        y = np.random.normal(
+            size=[num_examples, num_players]).astype('float32')
+
+        w = ResourceVariable(tf.zeros([num_dimensions, num_players]))
+
+        loss = tf.losses.mean_squared_error(y, tf.matmul(x, w))
+        optimizer = CompositeOptimizer(
+            lambda var: RmL1MarrVariableOptimizer(var, scale=1000.0), var_list=[w])
+
+        self.assertEqual(0.0, tf.reduce_sum(tf.abs(w)).numpy())
+        self.assertAlmostEqual(0.86844116, loss.numpy(), places=7)
+        for t in range(10):
+            with tf.GradientTape() as tape:
+                loss = tf.losses.mean_squared_error(y, tf.matmul(x, w))
+            grad = tape.gradient(loss, [w])
+            optimizer.apply_gradients(zip(grad, [w]))
+            if t > 1:
+                self.assertLess(loss.numpy(), 0.86844116)
+        self.assertAlmostEqual(0.85839784, loss.numpy(), places=6)
+
+        # Compare this to RmL1VariableOptimizer:
+        w = ResourceVariable(tf.zeros([num_dimensions, num_players]))
+
+        loss = tf.losses.mean_squared_error(y, tf.matmul(x, w))
+        optimizer = CompositeOptimizer(
+            lambda var: RmL1VariableOptimizer(var, scale=1000.0), var_list=[w])
+
+        self.assertEqual(0.0, tf.reduce_sum(tf.abs(w)).numpy())
+        self.assertAlmostEqual(0.86844116, loss.numpy(), places=7)
+        for t in range(10):
+            with tf.GradientTape() as tape:
+                loss = tf.losses.mean_squared_error(y, tf.matmul(x, w))
+            grad = tape.gradient(loss, [w])
+            optimizer.apply_gradients(zip(grad, [w]))
+        self.assertAlmostEqual(97.47662, loss.numpy(), places=5)
 
     def test_inf_linear_single_output(self):
         num_dimensions = 2
