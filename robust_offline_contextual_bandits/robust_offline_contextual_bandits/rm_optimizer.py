@@ -115,11 +115,13 @@ class GradEvBasedVariableOptimizer(VariableOptimizer):
                  utility_initializer=tf.zeros_initializer(),
                  ev_initializer=tf.zeros_initializer(),
                  momentum=0.0,
+                 clipvalue=None,
                  **kwargs):
         super(GradEvBasedVariableOptimizer, self).__init__(*args, **kwargs)
         self._utility_initializer = utility_initializer
         self._ev_initializer = ev_initializer
         self._momentum = momentum
+        self._clipvalue = clipvalue
         with self.name_scope():
             self.initializer = self._create_slots()
 
@@ -136,6 +138,10 @@ class GradEvBasedVariableOptimizer(VariableOptimizer):
     def utility(self, grad, scale=1.0, descale=True):
         m = self._momentum * self.get_slot('avg_utility')
         if not descale: m = m / scale
+        if self._clipvalue is not None:
+            grad = tf.where(
+                tf.greater(tf.abs(grad), self._clipvalue),
+                tf.sign(grad) * self._clipvalue, grad)
         return -grad + m
 
     def updated_utility(self, utility, scale=1.0, descale=True, num_updates=0):
