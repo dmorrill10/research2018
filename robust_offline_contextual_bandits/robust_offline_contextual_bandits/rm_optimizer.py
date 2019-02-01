@@ -202,18 +202,13 @@ class RmMixin(object):
             **kwargs)
 
 
-class AvgMaxRegretRegularization(object):
+class _ExtraRegularization(object):
     def __init__(self, *args, regularization_weight=1.0, **kwargs):
         super().__init__(*args, **kwargs)
         self._regularization_weight = regularization_weight
 
-    def _create_slots(self):
-        init = super()._create_slots()
-        avg_max_pos_regret = self._get_or_make_slot(
-            tf.zeros(self.shape), 'avg_max_pos_regret')
-
-        tf.summary.histogram('avg_max_pos_regret', avg_max_pos_regret)
-        return tf.group(avg_max_pos_regret.initializer, init)
+    def updated_regularization_bonus(self, *iregret, t=1):
+        raise NotImplementedError('Please override.')
 
     def dense_update(self, grad, num_updates=0):
         grad = self._with_fixed_dimensions(grad)
@@ -224,10 +219,9 @@ class AvgMaxRegretRegularization(object):
             self._matrix_var * iutility, axis=0, keep_dims=True)
         iev = iev / self.scales()
 
-        pos_iregret = plus(iutility - iev)
+        iregret = [iutility - iev]
         allow_negative = not self.non_negative
-        if allow_negative:
-            pos_iregret = tf.maximum(pos_iregret, plus(grad - iev))
+        if allow_negative: iregret.append(grad - iev)
 
         t = tf.cast(num_updates + 1, tf.float32)
         avg_ev = avg_ev.assign_add(
@@ -237,24 +231,62 @@ class AvgMaxRegretRegularization(object):
         avg_utility = avg_utility.assign_add(
             (iutility - avg_utility) / t, use_locking=self._use_locking)
 
-        avg_max_pos_regret = self.get_slot('avg_max_pos_regret')
-        avg_max_pos_regret = avg_max_pos_regret.assign_add(
-            (tf.maximum(avg_max_pos_regret, pos_iregret) - avg_max_pos_regret)
-            / t,
-            use_locking=self._use_locking)
-        scaled_avg_max_pos_regret = (tf.square(self.scales()) * (
-            self._regularization_weight / t) * avg_max_pos_regret)
+        regularization_bonus = self.updated_regularization_bonus(*iregret, t=t)
 
         next_var = self._var.assign(
             tf.reshape(
                 self.rm(
                     avg_utility,
                     avg_ev,
-                    regularization_bonus=scaled_avg_max_pos_regret),
+                    regularization_bonus=regularization_bonus),
                 self._var.shape),
             use_locking=self._use_locking)
 
-        return tf.group(next_var, avg_utility, avg_ev, avg_max_pos_regret)
+        return tf.group(next_var, avg_utility, avg_ev, regularization_bonus)
+
+
+class _AvgMaxRegretRegularization(_ExtraRegularization):
+    def _create_slots(self):
+        init = super()._create_slots()
+        avg_max_pos_regret = self._get_or_make_slot(
+            tf.zeros(self.shape), 'avg_max_pos_regret')
+
+        tf.summary.histogram('avg_max_pos_regret', avg_max_pos_regret)
+        return tf.group(avg_max_pos_regret.initializer, init)
+
+    def updated_regularization_bonus(self, *iregret, t=1):
+        avg_max_pos_regret = self.get_slot('avg_max_pos_regret')
+        max_iregret = avg_max_pos_regret
+        for r in iregret:
+            max_iregret = tf.maximum(max_iregret, plus(r))
+        avg_max_pos_regret = avg_max_pos_regret.assign_add(
+            (max_iregret - avg_max_pos_regret) / t,
+            use_locking=self._use_locking)
+        scaled_avg_max_pos_regret = (tf.square(self.scales()) * (
+            self._regularization_weight / t) * avg_max_pos_regret)
+        return scaled_avg_max_pos_regret
+
+
+class _AvgMaxAbsRegretRegularization(_ExtraRegularization):
+    def _create_slots(self):
+        init = super()._create_slots()
+        avg_max_abs_regret = self._get_or_make_slot(
+            tf.zeros(self.shape), 'avg_max_abs_regret')
+
+        tf.summary.histogram('avg_max_abs_regret', avg_max_abs_regret)
+        return tf.group(avg_max_abs_regret.initializer, init)
+
+    def updated_regularization_bonus(self, *iregret, t=1):
+        avg_max_abs_regret = self.get_slot('avg_max_abs_regret')
+        max_iregret = avg_max_abs_regret
+        for r in iregret:
+            max_iregret = tf.maximum(max_iregret, tf.abs(r))
+        avg_max_abs_regret = avg_max_abs_regret.assign_add(
+            (max_iregret - avg_max_abs_regret) / t,
+            use_locking=self._use_locking)
+        scaled_avg_max_abs_regret = (tf.square(self.scales()) * (
+            self._regularization_weight / t) * avg_max_abs_regret)
+        return scaled_avg_max_abs_regret
 
 
 class RmSimMixin(RmMixin):
@@ -288,24 +320,45 @@ class RmNnVariableOptimizer(RmInfVariableOptimizer):
         return super().scales() / 2.0
 
 
-class RmL1AmrrVariableOptimizer(AvgMaxRegretRegularization, RmMixin,
+class RmL1AmrrVariableOptimizer(_AvgMaxRegretRegularization, RmMixin,
                                 StaticScaleVariableOptimizer):
     pass
 
 
-class RmSimAmrrVariableOptimizer(AvgMaxRegretRegularization, RmSimMixin,
+class RmSimAmrrVariableOptimizer(_AvgMaxRegretRegularization, RmSimMixin,
                                  StaticScaleVariableOptimizer):
     pass
 
 
-class RmInfAmrrVariableOptimizer(AvgMaxRegretRegularization, RmMixin,
+class RmInfAmrrVariableOptimizer(_AvgMaxRegretRegularization, RmMixin,
                                  StaticScaleVariableOptimizer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, independent_dimensions=True, **kwargs)
 
 
-class RmNnAmrrVariableOptimizer(AvgMaxRegretRegularization,
+class RmNnAmrrVariableOptimizer(_AvgMaxRegretRegularization,
                                 RmNnVariableOptimizer):
+    pass
+
+
+class RmL1AmarrVariableOptimizer(_AvgMaxAbsRegretRegularization, RmMixin,
+                                 StaticScaleVariableOptimizer):
+    pass
+
+
+class RmSimAmarrVariableOptimizer(_AvgMaxAbsRegretRegularization, RmSimMixin,
+                                  StaticScaleVariableOptimizer):
+    pass
+
+
+class RmInfAmarrVariableOptimizer(_AvgMaxAbsRegretRegularization, RmMixin,
+                                  StaticScaleVariableOptimizer):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, independent_dimensions=True, **kwargs)
+
+
+class RmNnAmarrVariableOptimizer(_AvgMaxAbsRegretRegularization,
+                                 RmNnVariableOptimizer):
     pass
 
 
