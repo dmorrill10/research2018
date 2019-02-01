@@ -289,6 +289,27 @@ class _AvgMaxAbsRegretRegularization(_ExtraRegularization):
         return scaled_avg_max_abs_regret
 
 
+class _AvgRegretRegularization(_ExtraRegularization):
+    def _create_slots(self):
+        init = super()._create_slots()
+        avg_pos_regret = self._get_or_make_slot(
+            tf.zeros(self.shape), 'avg_pos_regret')
+
+        tf.summary.histogram('avg_pos_regret', avg_pos_regret)
+        return tf.group(avg_pos_regret.initializer, init)
+
+    def updated_regularization_bonus(self, *iregret, t=1):
+        avg_pos_regret = self.get_slot('avg_pos_regret')
+        max_iregret = iregret[0]
+        for i in range(1, len(iregret)):
+            max_iregret = tf.maximum(max_iregret, plus(iregret[i]))
+        avg_pos_regret = avg_pos_regret.assign_add(
+            (max_iregret - avg_pos_regret) / t, use_locking=self._use_locking)
+        scaled_avg_pos_regret = (tf.square(self.scales()) * (
+            self._regularization_weight / t) * avg_pos_regret)
+        return scaled_avg_pos_regret
+
+
 class RmSimMixin(RmMixin):
     @property
     def non_negative(self):
@@ -359,6 +380,27 @@ class RmInfAmarrVariableOptimizer(_AvgMaxAbsRegretRegularization, RmMixin,
 
 class RmNnAmarrVariableOptimizer(_AvgMaxAbsRegretRegularization,
                                  RmNnVariableOptimizer):
+    pass
+
+
+class RmL1ArrVariableOptimizer(_AvgRegretRegularization, RmMixin,
+                               StaticScaleVariableOptimizer):
+    pass
+
+
+class RmSimArrVariableOptimizer(_AvgRegretRegularization, RmSimMixin,
+                                StaticScaleVariableOptimizer):
+    pass
+
+
+class RmInfArrVariableOptimizer(_AvgRegretRegularization, RmMixin,
+                                StaticScaleVariableOptimizer):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, independent_dimensions=True, **kwargs)
+
+
+class RmNnArrVariableOptimizer(_AvgRegretRegularization,
+                               RmNnVariableOptimizer):
     pass
 
 
