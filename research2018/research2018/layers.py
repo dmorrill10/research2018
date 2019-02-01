@@ -196,3 +196,15 @@ class ResConvolution2DFlipout(ResMixin, tfp.layers.Convolution2DFlipout):
 
 
 ResConv2DFlipout = ResConvolution2DFlipout
+
+
+class ResDense(ResMixin, tf.keras.layers.Dense):
+    pass
+
+
+class ResConvolution2D(ResMixin, tf.keras.layers.Convolution2D):
+    pass
+
+
+ResConv2D = ResConvolution2D
+
