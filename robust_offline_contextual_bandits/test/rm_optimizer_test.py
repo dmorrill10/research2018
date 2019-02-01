@@ -11,7 +11,7 @@ from robust_offline_contextual_bandits.rm_optimizer import \
     RmInfVariableOptimizer, \
     RmSimVariableOptimizer, \
     RmNnVariableOptimizer, \
-    RmL1MarrVariableOptimizer
+    RmL1AmrrVariableOptimizer
 
 
 class RmOptimizerTest(tf.test.TestCase):
@@ -19,7 +19,7 @@ class RmOptimizerTest(tf.test.TestCase):
         np.random.seed(42)
         tf.set_random_seed(42)
 
-    def test_l1_marr_linear_multiple_outputs(self):
+    def test_l1_mrr_linear_multiple_outputs(self):
         num_dimensions = 2
         num_players = 5
         num_examples = 10
@@ -37,7 +37,8 @@ class RmOptimizerTest(tf.test.TestCase):
 
         loss = tf.losses.mean_squared_error(y, tf.matmul(x, w))
         optimizer = CompositeOptimizer(
-            lambda var: RmL1MarrVariableOptimizer(var, scale=1000.0), var_list=[w])
+            lambda var: RmL1AmrrVariableOptimizer(var, scale=1000.0),
+            var_list=[w])
 
         self.assertEqual(0.0, tf.reduce_sum(tf.abs(w)).numpy())
         self.assertAlmostEqual(0.86844116, loss.numpy(), places=7)

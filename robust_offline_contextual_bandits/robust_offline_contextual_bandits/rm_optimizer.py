@@ -37,7 +37,8 @@ def rm(utility,
        ev,
        scale=1.0,
        non_negative=False,
-       relax_simplex_constraint=False):
+       relax_simplex_constraint=False,
+       regularization_bonus=None):
     allow_negative = not non_negative
 
     p = plus(utility - ev)
@@ -45,7 +46,8 @@ def rm(utility,
 
     z = sum_over_dims(p)
     if allow_negative: z += sum_over_dims(d)
-    z = tile_to_dims(z, p.shape[0].value)
+    if regularization_bonus is not None:
+        z = z + regularization_bonus
 
     if relax_simplex_constraint:
         ev = plus(ev)
@@ -56,6 +58,8 @@ def rm(utility,
     if allow_negative: delta -= d
 
     c = scale / z
+
+    if z.shape[0].value == 1: z = tile_to_dims(z, p.shape[0].value)
     default = (
         tf.zeros_like(z) if allow_negative or p.shape[0].value < 2
         else tf.fill(z.shape, 1.0 / p.shape[0].value)
@@ -198,18 +202,18 @@ class RmMixin(object):
             **kwargs)
 
 
-class MaxAbsRegretRegularization(object):
+class AvgMaxRegretRegularization(object):
     def __init__(self, *args, regularization_weight=1.0, **kwargs):
         super().__init__(*args, **kwargs)
         self._regularization_weight = regularization_weight
 
     def _create_slots(self):
         init = super()._create_slots()
-        max_abs_regret = self._get_or_make_slot(
-            tf.zeros(self.shape), 'max_abs_regret')
+        avg_max_pos_regret = self._get_or_make_slot(
+            tf.zeros(self.shape), 'avg_max_pos_regret')
 
-        tf.summary.histogram('max_abs_regret', max_abs_regret)
-        return tf.group(max_abs_regret.initializer, init)
+        tf.summary.histogram('avg_max_pos_regret', avg_max_pos_regret)
+        return tf.group(avg_max_pos_regret.initializer, init)
 
     def dense_update(self, grad, num_updates=0):
         grad = self._with_fixed_dimensions(grad)
@@ -220,10 +224,10 @@ class MaxAbsRegretRegularization(object):
             self._matrix_var * iutility, axis=0, keep_dims=True)
         iev = iev / self.scales()
 
-        iabs_regret = tf.abs(iutility - iev)
+        pos_iregret = plus(iutility - iev)
         allow_negative = not self.non_negative
         if allow_negative:
-            iabs_regret = tf.maximum(iabs_regret, tf.abs(grad - iev))
+            pos_iregret = tf.maximum(pos_iregret, plus(grad - iev))
 
         t = tf.cast(num_updates + 1, tf.float32)
         avg_ev = avg_ev.assign_add(
@@ -233,41 +237,24 @@ class MaxAbsRegretRegularization(object):
         avg_utility = avg_utility.assign_add(
             (iutility - avg_utility) / t, use_locking=self._use_locking)
 
-        p = plus(avg_utility - avg_ev)
-        if allow_negative: d = plus(-avg_utility - avg_ev)
-
-        z = sum_over_dims(p)
-        if allow_negative: z += sum_over_dims(d)
-
-        max_abs_regret = self.get_slot('max_abs_regret')
-        max_abs_regret = max_abs_regret.assign(
-            tf.maximum(max_abs_regret, iabs_regret),
+        avg_max_pos_regret = self.get_slot('avg_max_pos_regret')
+        avg_max_pos_regret = avg_max_pos_regret.assign_add(
+            (tf.maximum(avg_max_pos_regret, pos_iregret) - avg_max_pos_regret)
+            / t,
             use_locking=self._use_locking)
-        scaled_max_abs_regret = (tf.square(self.scales()) * (
-            self._regularization_weight / t) * max_abs_regret)
-        z = z + scaled_max_abs_regret
-
-        if self._relax_simplex_constraint:
-            avg_ev = plus(avg_ev)
-            p = plus(avg_utility - avg_ev)
-            if allow_negative: d = plus(-avg_utility - avg_ev)
-
-        delta = p
-        if allow_negative: delta -= d
-
-        c = self.scales() / z
-        default = (
-            tf.zeros_like(z) if allow_negative or p.shape[0].value < 2
-            else tf.fill(z.shape, 1.0 / p.shape[0].value)
-        )  # yapf:disable
+        scaled_avg_max_pos_regret = (tf.square(self.scales()) * (
+            self._regularization_weight / t) * avg_max_pos_regret)
 
         next_var = self._var.assign(
             tf.reshape(
-                tf.where(tf.greater(z, 0), c * delta, default),
+                self.rm(
+                    avg_utility,
+                    avg_ev,
+                    regularization_bonus=scaled_avg_max_pos_regret),
                 self._var.shape),
             use_locking=self._use_locking)
 
-        return tf.group(next_var, avg_utility, avg_ev, max_abs_regret)
+        return tf.group(next_var, avg_utility, avg_ev, avg_max_pos_regret)
 
 
 class RmSimMixin(RmMixin):
@@ -298,23 +285,23 @@ class RmNnVariableOptimizer(RmSimMixin, StaticScaleVariableOptimizer):
             **kwargs)
 
 
-class RmL1MarrVariableOptimizer(MaxAbsRegretRegularization, RmMixin,
+class RmL1AmrrVariableOptimizer(AvgMaxRegretRegularization, RmMixin,
                                 StaticScaleVariableOptimizer):
     pass
 
 
-class RmSimMarrVariableOptimizer(MaxAbsRegretRegularization, RmSimMixin,
+class RmSimAmrrVariableOptimizer(AvgMaxRegretRegularization, RmSimMixin,
                                  StaticScaleVariableOptimizer):
     pass
 
 
-class RmInfMarrVariableOptimizer(MaxAbsRegretRegularization, RmMixin,
+class RmInfAmrrVariableOptimizer(AvgMaxRegretRegularization, RmMixin,
                                  StaticScaleVariableOptimizer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, independent_dimensions=True, **kwargs)
 
 
-class RmNnMarrVariableOptimizer(MaxAbsRegretRegularization, RmSimMixin,
+class RmNnAmrrVariableOptimizer(AvgMaxRegretRegularization, RmSimMixin,
                                 StaticScaleVariableOptimizer):
     def __init__(self, *args, **kwargs):
         super().__init__(
