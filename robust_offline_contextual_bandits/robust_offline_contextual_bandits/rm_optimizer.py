@@ -121,11 +121,11 @@ class GradEvBasedVariableOptimizer(VariableOptimizer):
                  momentum=0.0,
                  clipvalue=None,
                  **kwargs):
-        super(GradEvBasedVariableOptimizer, self).__init__(*args, **kwargs)
         self._utility_initializer = utility_initializer
         self._ev_initializer = ev_initializer
         self._momentum = momentum
         self._clipvalue = clipvalue
+        super(GradEvBasedVariableOptimizer, self).__init__(*args, **kwargs)
         with self.name_scope():
             self.initializer = self._create_slots()
 
@@ -162,8 +162,8 @@ class GradEvBasedVariableOptimizer(VariableOptimizer):
 
 class StaticScaleVariableOptimizer(GradEvBasedVariableOptimizer):
     def __init__(self, *args, scale=1, **kwargs):
-        super(StaticScaleVariableOptimizer, self).__init__(*args, **kwargs)
         self._scale = scale
+        super(StaticScaleVariableOptimizer, self).__init__(*args, **kwargs)
 
     def scales(self):
         return self._scale
@@ -276,13 +276,16 @@ class RmInfVariableOptimizer(RmMixin, StaticScaleVariableOptimizer):
         super().__init__(*args, independent_dimensions=True, **kwargs)
 
 
-class RmNnVariableOptimizer(RmSimMixin, StaticScaleVariableOptimizer):
-    def __init__(self, *args, **kwargs):
-        super().__init__(
-            *args,
-            independent_dimensions=True,
-            relax_simplex_constraint=True,
-            **kwargs)
+class RmNnVariableOptimizer(RmInfVariableOptimizer):
+    @property
+    def _matrix_var(self):
+        return super()._matrix_var - self.scales()
+
+    def rm(self, *args, **kwargs):
+        return super().rm(*args, **kwargs) + self.scales()
+
+    def scales(self):
+        return super().scales() / 2.0
 
 
 class RmL1AmrrVariableOptimizer(AvgMaxRegretRegularization, RmMixin,
@@ -301,14 +304,9 @@ class RmInfAmrrVariableOptimizer(AvgMaxRegretRegularization, RmMixin,
         super().__init__(*args, independent_dimensions=True, **kwargs)
 
 
-class RmNnAmrrVariableOptimizer(AvgMaxRegretRegularization, RmSimMixin,
-                                StaticScaleVariableOptimizer):
-    def __init__(self, *args, **kwargs):
-        super().__init__(
-            *args,
-            independent_dimensions=True,
-            relax_simplex_constraint=True,
-            **kwargs)
+class RmNnAmrrVariableOptimizer(AvgMaxRegretRegularization,
+                                RmNnVariableOptimizer):
+    pass
 
 
 class CompositeOptimizer(optimizer.Optimizer):
