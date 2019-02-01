@@ -57,7 +57,7 @@ def rm(utility,
     delta = p
     if allow_negative: delta -= d
 
-    c = scale / z
+    c = tf.div_no_nan(scale, z)
 
     if z.shape[0].value == 1: z = tile_to_dims(z, p.shape[0].value)
     default = (
@@ -162,7 +162,7 @@ class GradEvBasedVariableOptimizer(VariableOptimizer):
 
 class StaticScaleVariableOptimizer(GradEvBasedVariableOptimizer):
     def __init__(self, *args, scale=1, **kwargs):
-        self._scale = scale
+        self._scale = float(scale)
         super(StaticScaleVariableOptimizer, self).__init__(*args, **kwargs)
 
     def scales(self):
