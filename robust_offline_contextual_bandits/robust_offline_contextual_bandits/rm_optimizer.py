@@ -211,7 +211,7 @@ class RmBevL1VariableOptimizer(StaticScaleMixin, RegretBasedVariableOptimizer):
                  *args,
                  delay=True,
                  discount=0.0,
-                 regularization_weight=0.0,
+                 regularization_weight=None,
                  **kwargs):
         self._delay = delay
         self._discount = discount
@@ -222,6 +222,7 @@ class RmBevL1VariableOptimizer(StaticScaleMixin, RegretBasedVariableOptimizer):
         return None
 
     def scaled_regularization_bonus(self, bonus, t=1):
+        if bonus is None: return None
         return (tf.square(self.scales()) *
                 (self._regularization_weight / t) * bonus)
 
