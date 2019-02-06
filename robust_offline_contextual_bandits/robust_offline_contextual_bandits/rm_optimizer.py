@@ -112,9 +112,10 @@ class VariableOptimizer(object):
     def sparse_update(self, grad, num_updates=0):
         return self.dense_update(grad, num_updates)
 
-    def instantaneous_ev(self, utility):
-        return tf.reduce_sum(
-            self._matrix_var * utility, axis=0, keep_dims=True)
+    def instantaneous_ev(self, utility, scale=1.0, descale=True):
+        iev = tf.reduce_sum(self._matrix_var * utility, axis=0, keep_dims=True)
+        if descale: iev = iev / scale
+        return iev
 
 
 class RegretBasedVariableOptimizer(VariableOptimizer):
@@ -139,7 +140,7 @@ class RegretBasedVariableOptimizer(VariableOptimizer):
         tf.summary.histogram('avg_regret_down', avg_regret_down)
         return tf.group(avg_regret_up.initializer, avg_regret_down.initializer)
 
-    def utility(self, grad, scale=1.0, descale=True):
+    def utility(self, grad):
         if self._clipvalue is not None:
             grad = tf.where(
                 tf.greater(tf.abs(grad), self._clipvalue),
@@ -192,8 +193,7 @@ class GradEvBasedVariableOptimizer(VariableOptimizer):
 
     def updated_ev(self, utility, scale=1.0, descale=True, t=1):
         ev = self.get_slot('avg_ev')
-        iev = self.instantaneous_ev(utility)
-        if descale: iev = iev / scale
+        iev = self.instantaneous_ev(utility, scale=scale, descale=descale)
         return ev.assign_add((iev - ev) / t, use_locking=self._use_locking)
 
 
@@ -263,9 +263,9 @@ class RmBevL1VariableOptimizer(StaticScaleMixin, RegretBasedVariableOptimizer):
 
     def dense_update(self, grad, num_updates=0):
         grad = self._with_fixed_dimensions(grad)
-        utility = self.utility(grad, scale=self.scales())
+        utility = self.utility(grad)
         neg_utility = -utility
-        iev = self.instantaneous_ev(utility)
+        iev = self.instantaneous_ev(utility, scale=self.scales(), descale=True)
         avg_ev = self.get_slot('avg_ev')
 
         t = tf.cast(num_updates + 1, tf.float32)
@@ -401,8 +401,7 @@ class _RmExtraRegularization(object):
         iutility = self.utility(grad, scale=self.scales())
 
         avg_ev = self.get_slot('avg_ev')
-        iev = self.instantaneous_ev(iutility)
-        iev = iev / self.scales()
+        iev = self.instantaneous_ev(iutility, scale=self.scales())
 
         iregret = [iutility - iev]
         allow_negative = not self.non_negative
