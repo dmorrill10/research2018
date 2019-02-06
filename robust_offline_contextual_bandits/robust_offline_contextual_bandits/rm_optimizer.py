@@ -478,7 +478,7 @@ class _AvgRegretRegularization(object):
 
     def updated_regularization_bonus(self, *iregret, t=1):
         avg_pos_regret = self.get_slot('avg_pos_regret')
-        max_iregret = iregret[0]
+        max_iregret = plus(iregret[0])
         for i in range(1, len(iregret)):
             max_iregret = tf.maximum(max_iregret, plus(iregret[i]))
         return avg_pos_regret.assign_add(
