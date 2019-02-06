@@ -213,10 +213,12 @@ class RmBevL1VariableOptimizer(StaticScaleMixin, RegretBasedVariableOptimizer):
                  delay=True,
                  discount=0.0,
                  regularization_weight=None,
+                 additive_regularization=False,
                  **kwargs):
         self._delay = delay
         self._discount = discount
         self._regularization_weight = regularization_weight
+        self._additive_regularization = additive_regularization
         super().__init__(*args, **kwargs)
 
     def updated_regularization_bonus(self, *iregret, t=1):
@@ -248,7 +250,9 @@ class RmBevL1VariableOptimizer(StaticScaleMixin, RegretBasedVariableOptimizer):
         z = sum_over_dims(p)
         if allow_negative: z += sum_over_dims(d)
         if regularization_bonus is not None:
-            z = z + regularization_bonus
+            z = (z + regularization_bonus
+                 if self._additive_regularization else tf.maximum(
+                     z, regularization_bonus))
 
         delta = p
         if allow_negative: delta -= d
