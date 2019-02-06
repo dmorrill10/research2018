@@ -303,7 +303,7 @@ class RmBevL1VariableOptimizer(StaticScaleMixin, RegretBasedVariableOptimizer):
 
             avg_regret_down_is_neg = tf.less(next_avg_regret_down, 0.0)
             next_avg_regret_down = tf.where(
-                tf.logical_and(avg_regret_down_is_neg, utility_is_gt_ev),
+                tf.logical_and(avg_regret_down_is_neg, neg_utility_is_gt_ev),
                 self._discount * next_avg_regret_down, next_avg_regret_down)
 
         regularization_bonus = self.updated_regularization_bonus(
