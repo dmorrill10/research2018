@@ -609,7 +609,7 @@ class RmBevNnAmrrVariableOptimizer(_AvgMaxRegretRegularization,
 
 
 class RmBevL1AmarrVariableOptimizer(_AvgMaxAbsRegretRegularization,
-                                    RmBevL1AmrrVariableOptimizer):
+                                    RmBevL1VariableOptimizer):
     pass
 
 
