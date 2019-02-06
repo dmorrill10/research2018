@@ -270,7 +270,7 @@ class RmBevL1VariableOptimizer(StaticScaleMixin, RegretBasedVariableOptimizer):
 
         t = tf.cast(num_updates + 1, tf.float32)
         next_avg_ev = avg_ev.assign_add(
-            (avg_ev - iev) / t, use_locking=self._use_locking)
+            (iev - avg_ev) / t, use_locking=self._use_locking)
 
         avg_regret_up = self.get_slot('avg_regret_up')
         avg_regret_down = self.get_slot('avg_regret_down')
