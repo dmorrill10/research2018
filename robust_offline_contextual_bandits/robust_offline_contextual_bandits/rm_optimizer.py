@@ -335,6 +335,9 @@ class RmBevL1VariableOptimizer(StaticScaleMixin, RegretBasedVariableOptimizer):
 
 
 class RmBevNnVariableOptimizer(RmBevL1VariableOptimizer):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, independent_dimensions=True, **kwargs)
+
     @property
     def _matrix_var(self):
         return super()._matrix_var - self.scales()
