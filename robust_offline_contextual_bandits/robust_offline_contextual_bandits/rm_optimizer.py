@@ -131,14 +131,15 @@ class RegretBasedVariableOptimizer(VariableOptimizer):
             self.initializer = self._create_slots()
 
     def _create_slots(self):
-        avg_regret_up = self._get_or_make_slot(
-            self._initializer(self.shape), 'avg_regret_up')
-        avg_regret_down = self._get_or_make_slot(
-            self._initializer(self.shape), 'avg_regret_down')
+        cumulative_regret_up = self._get_or_make_slot(
+            self._initializer(self.shape), 'cumulative_regret_up')
+        cumulative_regret_down = self._get_or_make_slot(
+            self._initializer(self.shape), 'cumulative_regret_down')
 
-        tf.summary.histogram('avg_regret_up', avg_regret_up)
-        tf.summary.histogram('avg_regret_down', avg_regret_down)
-        return tf.group(avg_regret_up.initializer, avg_regret_down.initializer)
+        tf.summary.histogram('cumulative_regret_up', cumulative_regret_up)
+        tf.summary.histogram('cumulative_regret_down', cumulative_regret_down)
+        return tf.group(cumulative_regret_up.initializer,
+                        cumulative_regret_down.initializer)
 
     def utility(self, grad):
         if self._clipvalue is not None:
@@ -223,8 +224,7 @@ class RmBevL1VariableOptimizer(StaticScaleMixin, RegretBasedVariableOptimizer):
 
     def scaled_regularization_bonus(self, bonus, t=1):
         if bonus is None: return None
-        return (tf.square(self.scales()) *
-                (self._regularization_weight / t) * bonus)
+        return (tf.square(self.scales()) * self._regularization_weight * bonus)
 
     @property
     def non_negative(self):
@@ -238,12 +238,12 @@ class RmBevL1VariableOptimizer(StaticScaleMixin, RegretBasedVariableOptimizer):
         return tf.group(init, avg_ev.initializer)
 
     def _next_matrix_var(self,
-                         next_avg_regret_up,
-                         next_avg_regret_down,
+                         next_regret_up,
+                         next_regret_down,
                          regularization_bonus=None):
-        p = plus(next_avg_regret_up)
+        p = plus(next_regret_up)
         allow_negative = not self.non_negative
-        if allow_negative: d = plus(next_avg_regret_down)
+        if allow_negative: d = plus(next_regret_down)
 
         z = sum_over_dims(p)
         if allow_negative: z += sum_over_dims(d)
@@ -273,8 +273,8 @@ class RmBevL1VariableOptimizer(StaticScaleMixin, RegretBasedVariableOptimizer):
         next_avg_ev = avg_ev.assign_add(
             (iev - avg_ev) / t, use_locking=self._use_locking)
 
-        avg_regret_up = self.get_slot('avg_regret_up')
-        avg_regret_down = self.get_slot('avg_regret_down')
+        regret_up = self.get_slot('cumulative_regret_up')
+        regret_down = self.get_slot('cumulative_regret_down')
 
         iregret_up = utility - iev
         iregret_down = neg_utility - iev
@@ -283,39 +283,37 @@ class RmBevL1VariableOptimizer(StaticScaleMixin, RegretBasedVariableOptimizer):
         neg_utility_is_gt_ev = tf.greater(neg_utility, next_avg_ev)
 
         if self._delay:
-            adj_avg_regret_up = avg_regret_up
-            adj_avg_regret_down = avg_regret_down
+            adj_regret_up = regret_up
+            adj_regret_down = regret_down
         else:
-            avg_regret_up_is_neg = tf.less(avg_regret_up, 0.0)
-            adj_avg_regret_up = tf.where(
-                tf.logical_and(avg_regret_up_is_neg, utility_is_gt_ev),
-                self._discount * avg_regret_up, avg_regret_up)
-            avg_regret_down_is_neg = tf.less(avg_regret_down, 0.0)
-            adj_avg_regret_down = tf.where(
-                tf.logical_and(avg_regret_down_is_neg, neg_utility_is_gt_ev),
-                self._discount * avg_regret_down, avg_regret_down)
+            regret_up_is_neg = tf.less(regret_up, 0.0)
+            adj_regret_up = tf.where(
+                tf.logical_and(regret_up_is_neg, utility_is_gt_ev),
+                self._discount * regret_up, regret_up)
+            regret_down_is_neg = tf.less(regret_down, 0.0)
+            adj_regret_down = tf.where(
+                tf.logical_and(regret_down_is_neg, neg_utility_is_gt_ev),
+                self._discount * regret_down, regret_down)
 
-        next_avg_regret_up = (adj_avg_regret_up +
-                              (iregret_up - adj_avg_regret_up) / t)
-        next_avg_regret_down = (adj_avg_regret_down +
-                                (iregret_down - adj_avg_regret_down) / t)
+        next_regret_up = adj_regret_up + iregret_up
+        next_regret_down = adj_regret_down + iregret_down
 
         if self._delay:
-            avg_regret_up_is_neg = tf.less(next_avg_regret_up, 0.0)
-            next_avg_regret_up = tf.where(
-                tf.logical_and(avg_regret_up_is_neg, utility_is_gt_ev),
-                self._discount * next_avg_regret_up, next_avg_regret_up)
+            regret_up_is_neg = tf.less(next_regret_up, 0.0)
+            next_regret_up = tf.where(
+                tf.logical_and(regret_up_is_neg, utility_is_gt_ev),
+                self._discount * next_regret_up, next_regret_up)
 
-            avg_regret_down_is_neg = tf.less(next_avg_regret_down, 0.0)
-            next_avg_regret_down = tf.where(
-                tf.logical_and(avg_regret_down_is_neg, neg_utility_is_gt_ev),
-                self._discount * next_avg_regret_down, next_avg_regret_down)
+            regret_down_is_neg = tf.less(next_regret_down, 0.0)
+            next_regret_down = tf.where(
+                tf.logical_and(regret_down_is_neg, neg_utility_is_gt_ev),
+                self._discount * next_regret_down, next_regret_down)
 
         regularization_bonus = self.updated_regularization_bonus(
             iregret_up, iregret_down, t=t)
         next_var = self._var.assign(
             tf.reshape(
-                self._next_matrix_var(next_avg_regret_up, next_avg_regret_down,
+                self._next_matrix_var(next_regret_up, next_regret_down,
                                       self.scaled_regularization_bonus(
                                           regularization_bonus, t=t)),
                 self._var.shape),
@@ -323,11 +321,9 @@ class RmBevL1VariableOptimizer(StaticScaleMixin, RegretBasedVariableOptimizer):
 
         updates = [
             next_var,
-            avg_regret_up.assign(
-                next_avg_regret_up, use_locking=self._use_locking),
-            avg_regret_down.assign(
-                next_avg_regret_down, use_locking=self._use_locking),
-            next_avg_ev
+            regret_up.assign(next_regret_up, use_locking=self._use_locking),
+            regret_down.assign(
+                next_regret_down, use_locking=self._use_locking), next_avg_ev
         ]
         if regularization_bonus is not None:
             updates.append(regularization_bonus)
