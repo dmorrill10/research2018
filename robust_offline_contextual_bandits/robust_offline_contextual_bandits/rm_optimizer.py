@@ -207,10 +207,19 @@ class StaticScaleMixin(object):
 
 
 class RmBevL1VariableOptimizer(StaticScaleMixin, RegretBasedVariableOptimizer):
-    def __init__(self, *args, delay=True, discount=0.0, **kwargs):
+    def __init__(self,
+                 *args,
+                 delay=True,
+                 discount=0.0,
+                 regularization_weight=0.0,
+                 **kwargs):
         self._delay = delay
         self._discount = discount
+        self._regularization_weight = regularization_weight
         super().__init__(*args, **kwargs)
+
+    def updated_regularization_bonus(self, *iregret, t=1):
+        return None
 
     @property
     def non_negative(self):
@@ -223,13 +232,18 @@ class RmBevL1VariableOptimizer(StaticScaleMixin, RegretBasedVariableOptimizer):
         tf.summary.histogram('avg_ev', avg_ev)
         return tf.group(init, avg_ev.initializer)
 
-    def _next_matrix_var(self, next_avg_regret_up, next_avg_regret_down):
+    def _next_matrix_var(self,
+                         next_avg_regret_up,
+                         next_avg_regret_down,
+                         regularization_bonus=None):
         p = plus(next_avg_regret_up)
         allow_negative = not self.non_negative
         if allow_negative: d = plus(next_avg_regret_down)
 
         z = sum_over_dims(p)
         if allow_negative: z += sum_over_dims(d)
+        if regularization_bonus is not None:
+            z = z + regularization_bonus
 
         delta = p
         if allow_negative: delta -= d
@@ -292,18 +306,25 @@ class RmBevL1VariableOptimizer(StaticScaleMixin, RegretBasedVariableOptimizer):
                 tf.logical_and(avg_regret_down_is_neg, utility_is_gt_ev),
                 self._discount * next_avg_regret_down, next_avg_regret_down)
 
+        regularization_bonus = self.updated_regularization_bonus(
+            iregret_up, iregret_down, t=t)
         next_var = self._var.assign(
             tf.reshape(
-                self._next_matrix_var(next_avg_regret_up,
-                                      next_avg_regret_down), self._var.shape),
+                self._next_matrix_var(next_avg_regret_up, next_avg_regret_down,
+                                      regularization_bonus), self._var.shape),
             use_locking=self._use_locking)
 
-        return tf.group(next_var,
-                        avg_regret_up.assign(
-                            next_avg_regret_up, use_locking=self._use_locking),
-                        avg_regret_down.assign(
-                            next_avg_regret_down,
-                            use_locking=self._use_locking), next_avg_ev)
+        updates = [
+            next_var,
+            avg_regret_up.assign(
+                next_avg_regret_up, use_locking=self._use_locking),
+            avg_regret_down.assign(
+                next_avg_regret_down, use_locking=self._use_locking),
+            next_avg_ev
+        ]
+        if regularization_bonus is not None:
+            updates.append(regularization_bonus)
+        return tf.group(*updates)
 
 
 class RmBevNnVariableOptimizer(RmBevL1VariableOptimizer):
@@ -356,7 +377,7 @@ class RmMixin(object):
             **kwargs)
 
 
-class _ExtraRegularization(object):
+class _RmExtraRegularization(object):
     def __init__(self, *args, regularization_weight=1.0, **kwargs):
         super().__init__(*args, **kwargs)
         self._regularization_weight = regularization_weight
@@ -398,7 +419,7 @@ class _ExtraRegularization(object):
         return tf.group(next_var, avg_utility, avg_ev, regularization_bonus)
 
 
-class _AvgMaxRegretRegularization(_ExtraRegularization):
+class _AvgMaxRegretRegularization(object):
     def _create_slots(self):
         init = super()._create_slots()
         avg_max_pos_regret = self._get_or_make_slot(
@@ -420,7 +441,7 @@ class _AvgMaxRegretRegularization(_ExtraRegularization):
         return scaled_avg_max_pos_regret
 
 
-class _AvgMaxAbsRegretRegularization(_ExtraRegularization):
+class _AvgMaxAbsRegretRegularization(object):
     def _create_slots(self):
         init = super()._create_slots()
         avg_max_abs_regret = self._get_or_make_slot(
@@ -442,7 +463,7 @@ class _AvgMaxAbsRegretRegularization(_ExtraRegularization):
         return scaled_avg_max_abs_regret
 
 
-class _AvgRegretRegularization(_ExtraRegularization):
+class _AvgRegretRegularization(object):
     def _create_slots(self):
         init = super()._create_slots()
         avg_pos_regret = self._get_or_make_slot(
@@ -497,74 +518,122 @@ class RmNnVariableOptimizer(RmInfVariableOptimizer):
         return super().scales() / 2.0
 
 
-class RmL1AmrrVariableOptimizer(_AvgMaxRegretRegularization, RmMixin,
-                                StaticScaleMixin,
-                                GradEvBasedVariableOptimizer):
+class RmL1AmrrVariableOptimizer(
+        _AvgMaxRegretRegularization, _RmExtraRegularization, RmMixin,
+        StaticScaleMixin, GradEvBasedVariableOptimizer):
     pass
 
 
-class RmSimAmrrVariableOptimizer(_AvgMaxRegretRegularization, RmSimMixin,
-                                 StaticScaleMixin,
-                                 GradEvBasedVariableOptimizer):
+class RmSimAmrrVariableOptimizer(
+        _AvgMaxRegretRegularization, _RmExtraRegularization, RmSimMixin,
+        StaticScaleMixin, GradEvBasedVariableOptimizer):
     pass
 
 
-class RmInfAmrrVariableOptimizer(_AvgMaxRegretRegularization, RmMixin,
-                                 StaticScaleMixin,
-                                 GradEvBasedVariableOptimizer):
+class RmInfAmrrVariableOptimizer(
+        _AvgMaxRegretRegularization, _RmExtraRegularization, RmMixin,
+        StaticScaleMixin, GradEvBasedVariableOptimizer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, independent_dimensions=True, **kwargs)
 
 
 class RmNnAmrrVariableOptimizer(_AvgMaxRegretRegularization,
-                                RmNnVariableOptimizer):
+                                _RmExtraRegularization, RmNnVariableOptimizer):
     pass
 
 
-class RmL1AmarrVariableOptimizer(_AvgMaxAbsRegretRegularization, RmMixin,
-                                 StaticScaleMixin,
-                                 GradEvBasedVariableOptimizer):
+class RmL1AmarrVariableOptimizer(
+        _AvgMaxAbsRegretRegularization, _RmExtraRegularization, RmMixin,
+        StaticScaleMixin, GradEvBasedVariableOptimizer):
     pass
 
 
-class RmSimAmarrVariableOptimizer(_AvgMaxAbsRegretRegularization, RmSimMixin,
-                                  StaticScaleMixin,
-                                  GradEvBasedVariableOptimizer):
+class RmSimAmarrVariableOptimizer(
+        _AvgMaxAbsRegretRegularization, _RmExtraRegularization, RmSimMixin,
+        StaticScaleMixin, GradEvBasedVariableOptimizer):
     pass
 
 
-class RmInfAmarrVariableOptimizer(_AvgMaxAbsRegretRegularization, RmMixin,
-                                  StaticScaleMixin,
-                                  GradEvBasedVariableOptimizer):
+class RmInfAmarrVariableOptimizer(
+        _AvgMaxAbsRegretRegularization, _RmExtraRegularization, RmMixin,
+        StaticScaleMixin, GradEvBasedVariableOptimizer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, independent_dimensions=True, **kwargs)
 
 
 class RmNnAmarrVariableOptimizer(_AvgMaxAbsRegretRegularization,
+                                 _RmExtraRegularization,
                                  RmNnVariableOptimizer):
     pass
 
 
-class RmL1ArrVariableOptimizer(_AvgRegretRegularization, RmMixin,
+class RmL1ArrVariableOptimizer(_AvgRegretRegularization,
+                               _RmExtraRegularization, RmMixin,
                                StaticScaleMixin, GradEvBasedVariableOptimizer):
     pass
 
 
-class RmSimArrVariableOptimizer(_AvgRegretRegularization, RmSimMixin,
-                                StaticScaleMixin,
-                                GradEvBasedVariableOptimizer):
+class RmSimArrVariableOptimizer(
+        _AvgRegretRegularization, _RmExtraRegularization, RmSimMixin,
+        StaticScaleMixin, GradEvBasedVariableOptimizer):
     pass
 
 
-class RmInfArrVariableOptimizer(_AvgRegretRegularization, RmMixin,
-                                StaticScaleMixin,
-                                GradEvBasedVariableOptimizer):
+class RmInfArrVariableOptimizer(
+        _AvgRegretRegularization, _RmExtraRegularization, RmMixin,
+        StaticScaleMixin, GradEvBasedVariableOptimizer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, independent_dimensions=True, **kwargs)
 
 
 class RmNnArrVariableOptimizer(_AvgRegretRegularization,
-                               RmNnVariableOptimizer):
+                               _RmExtraRegularization, RmNnVariableOptimizer):
+    pass
+
+
+# RmBev with regularization bonus
+class RmBevL1AmrrVariableOptimizer(_AvgMaxRegretRegularization,
+                                   RmBevL1VariableOptimizer):
+    pass
+
+
+class RmBevInfAmrrVariableOptimizer(_AvgMaxRegretRegularization,
+                                    RmBevInfVariableOptimizer):
+    pass
+
+
+class RmBevNnAmrrVariableOptimizer(_AvgMaxRegretRegularization,
+                                   RmBevNnVariableOptimizer):
+    pass
+
+
+class RmBevL1AmarrVariableOptimizer(_AvgMaxAbsRegretRegularization,
+                                    RmBevL1AmrrVariableOptimizer):
+    pass
+
+
+class RmBevInfAmarrVariableOptimizer(_AvgMaxAbsRegretRegularization,
+                                     RmBevInfVariableOptimizer):
+    pass
+
+
+class RmBevNnAmarrVariableOptimizer(_AvgMaxAbsRegretRegularization,
+                                    RmBevNnVariableOptimizer):
+    pass
+
+
+class RmBevL1ArrVariableOptimizer(_AvgRegretRegularization,
+                                  RmBevL1VariableOptimizer):
+    pass
+
+
+class RmBevInfArrVariableOptimizer(_AvgRegretRegularization,
+                                   RmBevInfVariableOptimizer):
+    pass
+
+
+class RmBevNnArrVariableOptimizer(_AvgRegretRegularization,
+                                  RmBevNnVariableOptimizer):
     pass
 
 
