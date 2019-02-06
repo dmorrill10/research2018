@@ -221,6 +221,10 @@ class RmBevL1VariableOptimizer(StaticScaleMixin, RegretBasedVariableOptimizer):
     def updated_regularization_bonus(self, *iregret, t=1):
         return None
 
+    def scaled_regularization_bonus(self, bonus, t=1):
+        return (tf.square(self.scales()) *
+                (self._regularization_weight / t) * bonus)
+
     @property
     def non_negative(self):
         return False
@@ -311,7 +315,9 @@ class RmBevL1VariableOptimizer(StaticScaleMixin, RegretBasedVariableOptimizer):
         next_var = self._var.assign(
             tf.reshape(
                 self._next_matrix_var(next_avg_regret_up, next_avg_regret_down,
-                                      regularization_bonus), self._var.shape),
+                                      self.scaled_regularization_bonus(
+                                          regularization_bonus, t=t)),
+                self._var.shape),
             use_locking=self._use_locking)
 
         updates = [
@@ -385,6 +391,11 @@ class _RmExtraRegularization(object):
     def updated_regularization_bonus(self, *iregret, t=1):
         raise NotImplementedError('Please override.')
 
+    def scaled_regularization_bonus(self, bonus, t=1):
+        if bonus is None: return None
+        return (tf.square(self.scales()) *
+                (self._regularization_weight / t) * bonus)
+
     def dense_update(self, grad, num_updates=0):
         grad = self._with_fixed_dimensions(grad)
         iutility = self.utility(grad, scale=self.scales())
@@ -412,8 +423,8 @@ class _RmExtraRegularization(object):
                 self.rm(
                     avg_utility,
                     avg_ev,
-                    regularization_bonus=regularization_bonus),
-                self._var.shape),
+                    regularization_bonus=self.scaled_regularization_bonus(
+                        regularization_bonus, t=t)), self._var.shape),
             use_locking=self._use_locking)
 
         return tf.group(next_var, avg_utility, avg_ev, regularization_bonus)
@@ -433,12 +444,9 @@ class _AvgMaxRegretRegularization(object):
         max_iregret = avg_max_pos_regret
         for r in iregret:
             max_iregret = tf.maximum(max_iregret, plus(r))
-        avg_max_pos_regret = avg_max_pos_regret.assign_add(
+        return avg_max_pos_regret.assign_add(
             (max_iregret - avg_max_pos_regret) / t,
             use_locking=self._use_locking)
-        scaled_avg_max_pos_regret = (tf.square(self.scales()) * (
-            self._regularization_weight / t) * avg_max_pos_regret)
-        return scaled_avg_max_pos_regret
 
 
 class _AvgMaxAbsRegretRegularization(object):
@@ -455,12 +463,9 @@ class _AvgMaxAbsRegretRegularization(object):
         max_iregret = avg_max_abs_regret
         for r in iregret:
             max_iregret = tf.maximum(max_iregret, tf.abs(r))
-        avg_max_abs_regret = avg_max_abs_regret.assign_add(
+        return avg_max_abs_regret.assign_add(
             (max_iregret - avg_max_abs_regret) / t,
             use_locking=self._use_locking)
-        scaled_avg_max_abs_regret = (tf.square(self.scales()) * (
-            self._regularization_weight / t) * avg_max_abs_regret)
-        return scaled_avg_max_abs_regret
 
 
 class _AvgRegretRegularization(object):
@@ -477,11 +482,8 @@ class _AvgRegretRegularization(object):
         max_iregret = iregret[0]
         for i in range(1, len(iregret)):
             max_iregret = tf.maximum(max_iregret, plus(iregret[i]))
-        avg_pos_regret = avg_pos_regret.assign_add(
+        return avg_pos_regret.assign_add(
             (max_iregret - avg_pos_regret) / t, use_locking=self._use_locking)
-        scaled_avg_pos_regret = (tf.square(self.scales()) * (
-            self._regularization_weight / t) * avg_pos_regret)
-        return scaled_avg_pos_regret
 
 
 class RmSimMixin(RmMixin):
