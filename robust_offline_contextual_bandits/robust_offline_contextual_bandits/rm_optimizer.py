@@ -112,6 +112,43 @@ class VariableOptimizer(object):
     def sparse_update(self, grad, num_updates=0):
         return self.dense_update(grad, num_updates)
 
+    def instantaneous_ev(self, utility):
+        return tf.reduce_sum(
+            self._matrix_var * utility, axis=0, keep_dims=True)
+
+
+class RegretBasedVariableOptimizer(VariableOptimizer):
+    def __init__(self,
+                 *args,
+                 initializer=tf.zeros_initializer(),
+                 clipvalue=None,
+                 **kwargs):
+        self._initializer = initializer
+        self._clipvalue = clipvalue
+        super(RegretBasedVariableOptimizer, self).__init__(*args, **kwargs)
+        with self.name_scope():
+            self.initializer = self._create_slots()
+
+    def _create_slots(self):
+        avg_regret_up = self._get_or_make_slot(
+            self._initializer(self.shape), 'avg_regret_up')
+        avg_regret_down = self._get_or_make_slot(
+            self._initializer(self.shape), 'avg_regret_down')
+
+        tf.summary.histogram('avg_regret_up', avg_regret_up)
+        tf.summary.histogram('avg_regret_down', avg_regret_down)
+        return tf.group(avg_regret_up.initializer, avg_regret_down.initializer)
+
+    def utility(self, grad, scale=1.0, descale=True):
+        if self._clipvalue is not None:
+            grad = tf.where(
+                tf.greater(tf.abs(grad), self._clipvalue),
+                tf.sign(grad) * self._clipvalue, grad)
+        return -grad
+
+    def dense_update(self, grad, num_updates=0):
+        raise NotImplementedError('Please override.')
+
 
 class GradEvBasedVariableOptimizer(VariableOptimizer):
     def __init__(self,
@@ -155,18 +192,135 @@ class GradEvBasedVariableOptimizer(VariableOptimizer):
 
     def updated_ev(self, utility, scale=1.0, descale=True, t=1):
         ev = self.get_slot('avg_ev')
-        iev = tf.reduce_sum(self._matrix_var * utility, axis=0, keep_dims=True)
+        iev = self.instantaneous_ev(utility)
         if descale: iev = iev / scale
         return ev.assign_add((iev - ev) / t, use_locking=self._use_locking)
 
 
-class StaticScaleVariableOptimizer(GradEvBasedVariableOptimizer):
+class StaticScaleMixin(object):
     def __init__(self, *args, scale=1, **kwargs):
         self._scale = float(scale)
-        super(StaticScaleVariableOptimizer, self).__init__(*args, **kwargs)
+        super(StaticScaleMixin, self).__init__(*args, **kwargs)
 
     def scales(self):
         return self._scale
+
+
+class RmBevL1VariableOptimizer(StaticScaleMixin, RegretBasedVariableOptimizer):
+    def __init__(self, *args, delay=True, discount=0.0, **kwargs):
+        self._delay = delay
+        self._discount = discount
+        super().__init__(*args, **kwargs)
+
+    @property
+    def non_negative(self):
+        return False
+
+    def _create_slots(self):
+        init = super()._create_slots()
+        avg_ev = self._get_or_make_slot(
+            tf.zeros((1, self.num_columns())), 'avg_ev')
+        tf.summary.histogram('avg_ev', avg_ev)
+        return tf.group(init, avg_ev.initializer)
+
+    def _next_matrix_var(self, next_avg_regret_up, next_avg_regret_down):
+        p = plus(next_avg_regret_up)
+        allow_negative = not self.non_negative
+        if allow_negative: d = plus(next_avg_regret_down)
+
+        z = sum_over_dims(p)
+        if allow_negative: z += sum_over_dims(d)
+
+        delta = p
+        if allow_negative: delta -= d
+
+        c = tf.div_no_nan(self.scales(), z)
+
+        if z.shape[0].value == 1: z = tile_to_dims(z, p.shape[0].value)
+        default = (
+            tf.zeros_like(z) if allow_negative or p.shape[0].value < 2
+            else tf.fill(z.shape, 1.0 / p.shape[0].value)
+        )  # yapf:disable
+        return tf.where(tf.greater(z, 0), c * delta, default)
+
+    def dense_update(self, grad, num_updates=0):
+        grad = self._with_fixed_dimensions(grad)
+        utility = self.utility(grad, scale=self.scales())
+        neg_utility = -utility
+        iev = self.instantaneous_ev(utility)
+        avg_ev = self.get_slot('avg_ev')
+
+        t = tf.cast(num_updates + 1, tf.float32)
+        next_avg_ev = avg_ev.assign_add(
+            (avg_ev - iev) / t, use_locking=self._use_locking)
+
+        avg_regret_up = self.get_slot('avg_regret_up')
+        avg_regret_down = self.get_slot('avg_regret_down')
+
+        iregret_up = utility - iev
+        iregret_down = neg_utility - iev
+
+        utility_is_gt_ev = tf.greater(utility, next_avg_ev)
+        neg_utility_is_gt_ev = tf.greater(neg_utility, next_avg_ev)
+
+        if self._delay:
+            adj_avg_regret_up = avg_regret_up
+            adj_avg_regret_down = avg_regret_down
+        else:
+            avg_regret_up_is_neg = tf.less(avg_regret_up, 0.0)
+            adj_avg_regret_up = tf.where(
+                tf.logical_and(avg_regret_up_is_neg, utility_is_gt_ev),
+                self._discount * avg_regret_up, avg_regret_up)
+            avg_regret_down_is_neg = tf.less(avg_regret_down, 0.0)
+            adj_avg_regret_down = tf.where(
+                tf.logical_and(avg_regret_down_is_neg, neg_utility_is_gt_ev),
+                self._discount * avg_regret_down, avg_regret_down)
+
+        next_avg_regret_up = (adj_avg_regret_up +
+                              (iregret_up - adj_avg_regret_up) / t)
+        next_avg_regret_down = (adj_avg_regret_down +
+                                (iregret_down - adj_avg_regret_down) / t)
+
+        if self._delay:
+            avg_regret_up_is_neg = tf.less(next_avg_regret_up, 0.0)
+            next_avg_regret_up = tf.where(
+                tf.logical_and(avg_regret_up_is_neg, utility_is_gt_ev),
+                self._discount * next_avg_regret_up, next_avg_regret_up)
+
+            avg_regret_down_is_neg = tf.less(next_avg_regret_down, 0.0)
+            next_avg_regret_down = tf.where(
+                tf.logical_and(avg_regret_down_is_neg, utility_is_gt_ev),
+                self._discount * next_avg_regret_down, next_avg_regret_down)
+
+        next_var = self._var.assign(
+            tf.reshape(
+                self._next_matrix_var(next_avg_regret_up,
+                                      next_avg_regret_down), self._var.shape),
+            use_locking=self._use_locking)
+
+        return tf.group(next_var,
+                        avg_regret_up.assign(
+                            next_avg_regret_up, use_locking=self._use_locking),
+                        avg_regret_down.assign(
+                            next_avg_regret_down,
+                            use_locking=self._use_locking), next_avg_ev)
+
+
+class RmBevNnVariableOptimizer(RmBevL1VariableOptimizer):
+    @property
+    def _matrix_var(self):
+        return super()._matrix_var - self.scales()
+
+    def _next_matrix_var(self, *args, **kwargs):
+        return super()._next_matrix_var(*args, **kwargs) + self.scales()
+
+    def scales(self):
+        return super().scales() / 2.0
+
+
+class RmBevInfVariableOptimizer(RmBevL1VariableOptimizer):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, independent_dimensions=True, **kwargs)
 
 
 class RmMixin(object):
@@ -215,13 +369,12 @@ class _ExtraRegularization(object):
         iutility = self.utility(grad, scale=self.scales())
 
         avg_ev = self.get_slot('avg_ev')
-        iev = tf.reduce_sum(
-            self._matrix_var * iutility, axis=0, keep_dims=True)
+        iev = self.instantaneous_ev(iutility)
         iev = iev / self.scales()
 
         iregret = [iutility - iev]
         allow_negative = not self.non_negative
-        if allow_negative: iregret.append(grad - iev)
+        if allow_negative: iregret.append(-iutility - iev)
 
         t = tf.cast(num_updates + 1, tf.float32)
         avg_ev = avg_ev.assign_add(
@@ -316,15 +469,18 @@ class RmSimMixin(RmMixin):
         return True
 
 
-class RmL1VariableOptimizer(RmMixin, StaticScaleVariableOptimizer):
+class RmL1VariableOptimizer(RmMixin, StaticScaleMixin,
+                            GradEvBasedVariableOptimizer):
     pass
 
 
-class RmSimVariableOptimizer(RmSimMixin, StaticScaleVariableOptimizer):
+class RmSimVariableOptimizer(RmSimMixin, StaticScaleMixin,
+                             GradEvBasedVariableOptimizer):
     pass
 
 
-class RmInfVariableOptimizer(RmMixin, StaticScaleVariableOptimizer):
+class RmInfVariableOptimizer(RmMixin, StaticScaleMixin,
+                             GradEvBasedVariableOptimizer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, independent_dimensions=True, **kwargs)
 
@@ -342,17 +498,20 @@ class RmNnVariableOptimizer(RmInfVariableOptimizer):
 
 
 class RmL1AmrrVariableOptimizer(_AvgMaxRegretRegularization, RmMixin,
-                                StaticScaleVariableOptimizer):
+                                StaticScaleMixin,
+                                GradEvBasedVariableOptimizer):
     pass
 
 
 class RmSimAmrrVariableOptimizer(_AvgMaxRegretRegularization, RmSimMixin,
-                                 StaticScaleVariableOptimizer):
+                                 StaticScaleMixin,
+                                 GradEvBasedVariableOptimizer):
     pass
 
 
 class RmInfAmrrVariableOptimizer(_AvgMaxRegretRegularization, RmMixin,
-                                 StaticScaleVariableOptimizer):
+                                 StaticScaleMixin,
+                                 GradEvBasedVariableOptimizer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, independent_dimensions=True, **kwargs)
 
@@ -363,17 +522,20 @@ class RmNnAmrrVariableOptimizer(_AvgMaxRegretRegularization,
 
 
 class RmL1AmarrVariableOptimizer(_AvgMaxAbsRegretRegularization, RmMixin,
-                                 StaticScaleVariableOptimizer):
+                                 StaticScaleMixin,
+                                 GradEvBasedVariableOptimizer):
     pass
 
 
 class RmSimAmarrVariableOptimizer(_AvgMaxAbsRegretRegularization, RmSimMixin,
-                                  StaticScaleVariableOptimizer):
+                                  StaticScaleMixin,
+                                  GradEvBasedVariableOptimizer):
     pass
 
 
 class RmInfAmarrVariableOptimizer(_AvgMaxAbsRegretRegularization, RmMixin,
-                                  StaticScaleVariableOptimizer):
+                                  StaticScaleMixin,
+                                  GradEvBasedVariableOptimizer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, independent_dimensions=True, **kwargs)
 
@@ -384,17 +546,19 @@ class RmNnAmarrVariableOptimizer(_AvgMaxAbsRegretRegularization,
 
 
 class RmL1ArrVariableOptimizer(_AvgRegretRegularization, RmMixin,
-                               StaticScaleVariableOptimizer):
+                               StaticScaleMixin, GradEvBasedVariableOptimizer):
     pass
 
 
 class RmSimArrVariableOptimizer(_AvgRegretRegularization, RmSimMixin,
-                                StaticScaleVariableOptimizer):
+                                StaticScaleMixin,
+                                GradEvBasedVariableOptimizer):
     pass
 
 
 class RmInfArrVariableOptimizer(_AvgRegretRegularization, RmMixin,
-                                StaticScaleVariableOptimizer):
+                                StaticScaleMixin,
+                                GradEvBasedVariableOptimizer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, independent_dimensions=True, **kwargs)
 
