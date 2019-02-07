@@ -89,7 +89,8 @@ class VariableOptimizer(object):
         return self._with_fixed_dimensions(self._var)
 
     def variables(self):
-        return list(zip(*sorted(self._slots.items(), key=lambda e: e[0])))[-1]
+        return ([] if len(self._slots) < 1 else list(
+            zip(*sorted(self._slots.items(), key=lambda e: e[0])))[-1])
 
     def num_rows(self):
         return self.shape[0]
@@ -134,9 +135,6 @@ class GradientDescentVariableOptimizer(VariableOptimizer):
         self._sqrt_step_size_decrease = sqrt_step_size_decrease
         self.initializer = tf.group()
         super(GradientDescentVariableOptimizer, self).__init__(*args, **kwargs)
-
-    def variables(self):
-        return []
 
     def dense_update(self, grad, num_updates=0):
         if self._clipvalue is not None:
