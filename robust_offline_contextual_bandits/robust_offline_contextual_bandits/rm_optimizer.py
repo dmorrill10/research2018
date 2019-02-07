@@ -118,6 +118,41 @@ class VariableOptimizer(object):
         return iev
 
 
+class GradientDescentVariableOptimizer(VariableOptimizer):
+    def __init__(self,
+                 *args,
+                 step_size=0.1,
+                 initializer=tf.zeros_initializer(),
+                 clipvalue=None,
+                 linear_step_size_decrease=False,
+                 sqrt_step_size_decrease=False,
+                 **kwargs):
+        self._initializer = initializer
+        self._clipvalue = clipvalue
+        self._step_size = step_size
+        self._linear_step_size_decrease = linear_step_size_decrease
+        self._sqrt_step_size_decrease = sqrt_step_size_decrease
+        self.initializer = tf.group()
+        super(GradientDescentVariableOptimizer, self).__init__(*args, **kwargs)
+
+    def variables(self):
+        return []
+
+    def dense_update(self, grad, num_updates=0):
+        if self._clipvalue is not None:
+            grad = tf.where(
+                tf.greater(tf.abs(grad), self._clipvalue),
+                tf.sign(grad) * self._clipvalue, grad)
+        ss = self._step_size
+        if self._linear_step_size_decrease:
+            t = tf.cast(num_updates + 1, tf.float32)
+            ss = ss / t
+        elif self._sqrt_step_size_decrease:
+            t = tf.cast(num_updates + 1, tf.float32)
+            ss = ss / tf.sqrt(t)
+        return self._var.assign_add(-self._step_size * grad)
+
+
 class RegretBasedVariableOptimizer(VariableOptimizer):
     def __init__(self,
                  *args,
