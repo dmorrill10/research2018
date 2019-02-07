@@ -214,11 +214,13 @@ class RmBevL1VariableOptimizer(StaticScaleMixin, RegretBasedVariableOptimizer):
                  discount=0.0,
                  regularization_weight=None,
                  additive_regularization=False,
+                 regularization_initializer=tf.zeros_initializer(),
                  **kwargs):
         self._delay = delay
         self._discount = discount
         self._regularization_weight = regularization_weight
         self._additive_regularization = additive_regularization
+        self._regularization_initializer = regularization_initializer
         super().__init__(*args, **kwargs)
 
     def updated_regularization_bonus(self, *iregret, t=1):
@@ -388,9 +390,14 @@ class RmMixin(object):
 
 
 class _RmExtraRegularization(object):
-    def __init__(self, *args, regularization_weight=1.0, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self,
+                 *args,
+                 regularization_weight=1.0,
+                 regularization_initializer=tf.zeros_initializer(),
+                 **kwargs):
         self._regularization_weight = regularization_weight
+        self._regularization_initializer = regularization_initializer
+        super().__init__(*args, **kwargs)
 
     def updated_regularization_bonus(self, *iregret, t=1):
         raise NotImplementedError('Please override.')
@@ -437,7 +444,7 @@ class _AvgMaxRegretRegularization(object):
     def _create_slots(self):
         init = super()._create_slots()
         avg_max_pos_regret = self._get_or_make_slot(
-            tf.zeros(self.shape), 'avg_max_pos_regret')
+            self._regularization_initializer(self.shape), 'avg_max_pos_regret')
 
         tf.summary.histogram('avg_max_pos_regret', avg_max_pos_regret)
         return tf.group(avg_max_pos_regret.initializer, init)
@@ -456,7 +463,7 @@ class _AvgMaxAbsRegretRegularization(object):
     def _create_slots(self):
         init = super()._create_slots()
         avg_max_abs_regret = self._get_or_make_slot(
-            tf.zeros(self.shape), 'avg_max_abs_regret')
+            self._regularization_initializer(self.shape), 'avg_max_abs_regret')
 
         tf.summary.histogram('avg_max_abs_regret', avg_max_abs_regret)
         return tf.group(avg_max_abs_regret.initializer, init)
@@ -475,7 +482,7 @@ class _AvgRegretRegularization(object):
     def _create_slots(self):
         init = super()._create_slots()
         avg_pos_regret = self._get_or_make_slot(
-            tf.zeros(self.shape), 'avg_pos_regret')
+            self._regularization_initializer(self.shape), 'avg_pos_regret')
 
         tf.summary.histogram('avg_pos_regret', avg_pos_regret)
         return tf.group(avg_pos_regret.initializer, init)
