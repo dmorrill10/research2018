@@ -215,14 +215,14 @@ class RmBevL1VariableOptimizer(StaticScaleMixin, RegretBasedVariableOptimizer):
                  regularization_weight=None,
                  additive_regularization=False,
                  regularization_initializer=tf.zeros_initializer(),
-                 avoid_steps_beyond_avg_gradient_norm=False,
+                 avoid_steps_beyond_max_gradient_norm=False,
                  **kwargs):
         self._delay = delay
         self._discount = discount
         self._regularization_weight = regularization_weight
         self._additive_regularization = additive_regularization
         self._regularization_initializer = regularization_initializer
-        self._avoid_steps_beyond_avg_gradient_norm = avoid_steps_beyond_avg_gradient_norm
+        self._avoid_steps_beyond_max_gradient_norm = avoid_steps_beyond_max_gradient_norm
         super().__init__(*args, **kwargs)
 
     def updated_regularization_bonus(self, *iregret, t=1):
@@ -243,11 +243,11 @@ class RmBevL1VariableOptimizer(StaticScaleMixin, RegretBasedVariableOptimizer):
         tf.summary.histogram('avg_ev', avg_ev)
 
         init = [init, avg_ev.initializer]
-        if self._avoid_steps_beyond_avg_gradient_norm:
-            avg_gradient_norm = self._get_or_make_slot(
-                tf.zeros([]), 'avg_gradient_norm')
-            tf.summary.histogram('avg_gradient_norm', avg_gradient_norm)
-            init.append(avg_gradient_norm.initializer)
+        if self._avoid_steps_beyond_max_gradient_norm:
+            max_gradient_norm = self._get_or_make_slot(
+                tf.zeros([]), 'max_gradient_norm')
+            tf.summary.histogram('max_gradient_norm', max_gradient_norm)
+            init.append(max_gradient_norm.initializer)
         return tf.group(*init)
 
     def _next_matrix_var(self,
@@ -329,12 +329,12 @@ class RmBevL1VariableOptimizer(StaticScaleMixin, RegretBasedVariableOptimizer):
             iregret_up, iregret_down, t=t)
 
         scale = self.scales()
-        if self._avoid_steps_beyond_avg_gradient_norm:
-            avg_gradient_norm = self.get_slot('avg_gradient_norm')
-            avg_gradient_norm = avg_gradient_norm.assign_add(
-                (tf.reduce_sum(tf.abs(grad)) - avg_gradient_norm) / t,
+        if self._avoid_steps_beyond_max_gradient_norm:
+            max_gradient_norm = self.get_slot('max_gradient_norm')
+            max_gradient_norm = max_gradient_norm.assign(
+                tf.maximum(tf.reduce_sum(tf.abs(grad)), max_gradient_norm),
                 use_locking=self._use_locking)
-            scale = tf.minimum(scale, avg_gradient_norm)
+            scale = tf.minimum(scale, max_gradient_norm)
         next_var = self._var.assign(
             tf.reshape(
                 self._next_matrix_var(
@@ -353,8 +353,8 @@ class RmBevL1VariableOptimizer(StaticScaleMixin, RegretBasedVariableOptimizer):
         ]
         if regularization_bonus is not None:
             updates.append(regularization_bonus)
-        if self._avoid_steps_beyond_avg_gradient_norm:
-            updates.append(avg_gradient_norm)
+        if self._avoid_steps_beyond_max_gradient_norm:
+            updates.append(max_gradient_norm)
         return tf.group(*updates)
 
 
