@@ -160,6 +160,8 @@ class AdamVariableOptimizer(VariableOptimizer):
                  epsilon=None,
                  clipvalue=None,
                  amsgrad=True,
+                 init_with_first_grad=False,
+                 debias=True,
                  **kwargs):
         '''
         Default parameters follow those provided in the original paper.
@@ -179,7 +181,8 @@ class AdamVariableOptimizer(VariableOptimizer):
         ) if epsilon is None else epsilon
         self._clipvalue = clipvalue
         self._amsgrad = amsgrad
-        self.initializer = tf.group()
+        self._init_with_first_grad = init_with_first_grad
+        self._debias = debias
         super(AdamVariableOptimizer, self).__init__(*args, **kwargs)
         with self.name_scope():
             self.initializer = self._create_slots()
@@ -207,17 +210,23 @@ class AdamVariableOptimizer(VariableOptimizer):
         m = self.get_slot('m')
         v = self.get_slot('v')
 
-        t = tf.cast(num_updates + 1, tf.float32)
+        if self._init_with_first_grad and num_updates == 0:
+            next_m = grad
+            next_v = tf.square(grad)
+        else:
+            next_m = self._beta_1 * m + (1.0 - self._beta_1) * grad
+            next_v = self._beta_2 * v + (1.0 - self._beta_2) * tf.square(grad)
 
-        next_m = m.assign(
-            self._beta_1 * m + (1.0 - self._beta_1) * grad,
-            use_locking=self._use_locking)
-        m_hat = next_m / (1.0 - tf.pow(self._beta_1, t))
+        next_m = m.assign(next_m, use_locking=self._use_locking)
+        next_v = v.assign(next_v, use_locking=self._use_locking)
 
-        next_v = v.assign(
-            self._beta_2 * v + (1.0 - self._beta_2) * tf.square(grad),
-            use_locking=self._use_locking)
-        v_hat = next_v / (1.0 - tf.pow(self._beta_2, t))
+        if self._debias:
+            t = tf.cast(num_updates + 1, tf.float32)
+            m_hat = next_m / (1.0 - tf.pow(self._beta_1, t))
+            v_hat = next_v / (1.0 - tf.pow(self._beta_2, t))
+        else:
+            m_hat = next_m
+            v_hat = next_v
 
         optional_updates = []
         if self._amsgrad:
