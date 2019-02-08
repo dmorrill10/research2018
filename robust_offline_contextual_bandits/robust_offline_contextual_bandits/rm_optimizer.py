@@ -150,7 +150,7 @@ class GradientDescentVariableOptimizer(VariableOptimizer):
 
 
 class AdamVariableOptimizer(VariableOptimizer):
-    '''Adam optimizer without debiasing.'''
+    '''Adam optimizer.'''
 
     def __init__(self,
                  *args,
@@ -206,27 +206,28 @@ class AdamVariableOptimizer(VariableOptimizer):
                 tf.sign(grad) * self._clipvalue, grad)
         m = self.get_slot('m')
         v = self.get_slot('v')
-        if num_updates == 0:
-            next_m = grad
-            next_v = tf.square(grad)
-        else:
-            next_m = self._beta_1 * m + (1.0 - self._beta_1) * grad
-            next_v = (self._beta_2 * v +
-                      (1.0 - self._beta_2) * tf.square(grad))
-        next_m = m.assign(next_m)
-        next_v = v.assign(next_v)
+
+        t = tf.cast(num_updates + 1, tf.float32)
+
+        next_m = m.assign(
+            self._beta_1 * m + (1.0 - self._beta_1) * grad,
+            use_locking=self._use_locking)
+        m_hat = next_m / (1.0 - tf.pow(self._beta_1, t))
+
+        next_v = v.assign(
+            self._beta_2 * v + (1.0 - self._beta_2) * tf.square(grad),
+            use_locking=self._use_locking)
+        v_hat = next_v / (1.0 - tf.pow(self._beta_2, t))
 
         optional_updates = []
         if self._amsgrad:
-            v_hat = self.get_slot('v_hat')
-            v_hat = v_hat.assign(tf.maximum(v_hat, next_v))
+            v_hat_prev = self.get_slot('v_hat')
+            v_hat = v_hat_prev.assign(tf.maximum(v_hat_prev, v_hat))
             optional_updates.append(v_hat)
-        else:
-            v_hat = next_v
         lr = self._lr / (tf.sqrt(v_hat) + self._epsilon)
 
         return tf.group(
-            self._var.assign_add(-lr * next_m), next_m, next_v,
+            self._var.assign_add(-lr * m_hat), next_m, next_v,
             *optional_updates)
 
 
