@@ -123,12 +123,10 @@ class GradientDescentVariableOptimizer(VariableOptimizer):
     def __init__(self,
                  *args,
                  step_size=0.1,
-                 initializer=tf.zeros_initializer(),
                  clipvalue=None,
                  linear_step_size_decrease=False,
                  sqrt_step_size_decrease=False,
                  **kwargs):
-        self._initializer = initializer
         self._clipvalue = clipvalue
         self._step_size = step_size
         self._linear_step_size_decrease = linear_step_size_decrease
@@ -149,6 +147,87 @@ class GradientDescentVariableOptimizer(VariableOptimizer):
             t = tf.cast(num_updates + 1, tf.float32)
             ss = ss / tf.sqrt(t)
         return self._var.assign_add(-self._step_size * grad)
+
+
+class AdamVariableOptimizer(VariableOptimizer):
+    '''Adam optimizer without debiasing.'''
+
+    def __init__(self,
+                 *args,
+                 lr=0.001,
+                 beta_1=0.9,
+                 beta_2=0.999,
+                 epsilon=None,
+                 clipvalue=None,
+                 amsgrad=True,
+                 **kwargs):
+        '''
+        Default parameters follow those provided in the original paper.
+
+        Arguments:
+        lr: float >= 0. Learning rate.
+        beta_1: float, 0 < beta < 1. Momentum weight. Generally close to 1.
+        beta_2: float, 0 < beta < 1. Adagrad weight. Generally close to 1.
+        epsilon: float >= 0. Fuzz factor. If None, defaults to K.epsilon().
+        clipvalue: float > 0. Cap on the size of gradient values. If None, defaults to infinite.
+        amsgrad: bool. If True, uses the AMSGrad intermediate max step to ensure that the AdaGrad weights are non-decreasing.
+        '''
+        self._lr = lr
+        self._beta_1 = beta_1
+        self._beta_2 = beta_2
+        self._epsilon = tf.keras.backend.epsilon(
+        ) if epsilon is None else epsilon
+        self._clipvalue = clipvalue
+        self._amsgrad = amsgrad
+        self.initializer = tf.group()
+        super(AdamVariableOptimizer, self).__init__(*args, **kwargs)
+        with self.name_scope():
+            self.initializer = self._create_slots()
+
+    def _create_slots(self):
+        v = self._get_or_make_slot(tf.zeros(self._var.shape), 'v')
+        m = self._get_or_make_slot(tf.zeros(self._var.shape), 'm')
+
+        tf.summary.histogram('v', v)
+        tf.summary.histogram('m', m)
+
+        init = [v.initializer, m.initializer]
+
+        if self._amsgrad:
+            v_hat = self._get_or_make_slot(tf.zeros(self._var.shape), 'v_hat')
+            tf.summary.histogram('v_hat', v_hat)
+            init.append(v_hat.initializer)
+        return tf.group(*init)
+
+    def dense_update(self, grad, num_updates=0):
+        if self._clipvalue is not None:
+            grad = tf.where(
+                tf.greater(tf.abs(grad), self._clipvalue),
+                tf.sign(grad) * self._clipvalue, grad)
+        m = self.get_slot('m')
+        v = self.get_slot('v')
+        if num_updates == 0:
+            next_m = grad
+            next_v = tf.square(grad)
+        else:
+            next_m = self._beta_1 * m + (1.0 - self._beta_1) * grad
+            next_v = (self._beta_2 * v +
+                      (1.0 - self._beta_2) * tf.square(grad))
+        next_m = m.assign(next_m)
+        next_v = v.assign(next_v)
+
+        optional_updates = []
+        if self._amsgrad:
+            v_hat = self.get_slot('v_hat')
+            v_hat = v_hat.assign(tf.maximum(v_hat, next_v))
+            optional_updates.append(v_hat)
+        else:
+            v_hat = next_v
+        lr = self._lr / (tf.sqrt(v_hat) + self._epsilon)
+
+        return tf.group(
+            self._var.assign_add(-lr * next_m), next_m, next_v,
+            *optional_updates)
 
 
 class RegretBasedVariableOptimizer(VariableOptimizer):
