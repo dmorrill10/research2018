@@ -140,3 +140,52 @@ class TaggedDatum(UserDict):
 class TaggedData(UserList):
     def append(self, item, **tags):
         super().append(TaggedDatum(item, **tags))
+
+
+def subtract_mean_scale_to_zero_one(x, ref_min, ref_max, ref_mean):
+    abs_x = tf.abs(x)
+    num_rows = tf.shape(abs_x)[0]
+
+    def tile(x):
+        return tf.tile(x, [num_rows, 1, 1, 1])
+
+    max_obs = tf.maximum(tf.reduce_max(abs_x, axis=0, keepdims=True), ref_max)
+    min_obs = tf.minimum(tf.reduce_min(abs_x, axis=0, keepdims=True), ref_min)
+    delta_obs = tile(max_obs - min_obs)
+    return tf.where(
+        tf.greater(delta_obs, 0.0), (x - ref_mean) / delta_obs,
+        tf.zeros_like(x))
+
+
+def undo_subtract_mean_scale_to_zero_one(x, ref_min, ref_max, ref_mean):
+    abs_x = tf.abs(x)
+    num_rows = tf.shape(abs_x)[0]
+
+    def tile(x):
+        return tf.tile(x, [num_rows, 1, 1, 1])
+
+    max_obs = tf.maximum(tf.reduce_max(abs_x, axis=0, keepdims=True), ref_max)
+    min_obs = tf.minimum(tf.reduce_min(abs_x, axis=0, keepdims=True), ref_min)
+    delta_obs = max_obs - min_obs
+    return x * delta_obs + ref_mean
+
+
+def subtract_mean_scale_to_zero_one_np(x, ref_min, ref_max, ref_mean):
+    abs_x = np.abs(x)
+    num_rows = abs_x.shape[0]
+
+    def tile(x):
+        return np.tile(x, [num_rows, 1, 1, 1])
+
+    max_obs = np.maximum(np.max(abs_x, axis=0, keepdims=True), ref_max)
+    min_obs = np.minimum(np.min(abs_x, axis=0, keepdims=True), ref_min)
+    delta_obs = tile(max_obs - min_obs)
+    return np.divide(x - ref_mean, delta_obs, where=delta_obs > 0)
+
+
+def undo_subtract_mean_scale_to_zero_one_np(x, ref_min, ref_max, ref_mean):
+    abs_x = np.abs(x)
+    max_obs = np.maximum(np.max(abs_x, axis=0, keepdims=True), ref_max)
+    min_obs = np.minimum(np.min(abs_x, axis=0, keepdims=True), ref_min)
+    delta_obs = max_obs - min_obs
+    return x * delta_obs + ref_mean
