@@ -5,12 +5,12 @@ tfk = tf.keras
 
 
 class ResMixin(object):
-    def __init__(self, *args, residual_weight=1.0, **kwargs):
+    def __init__(self, *args, input_transformation=lambda x: x, **kwargs):
         super().__init__(*args, **kwargs)
-        self.residual_weight = residual_weight
+        self._input_transformation = input_transformation
 
     def call(self, inputs):
-        return super().call(inputs) + self.residual_weight * inputs
+        return super().call(inputs) + self._input_transformation(inputs)
 
 
 def mvn_posterior_fn(dtype,
