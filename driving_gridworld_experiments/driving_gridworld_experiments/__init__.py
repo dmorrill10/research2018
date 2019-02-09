@@ -27,7 +27,7 @@ from research2018.fixed_parameter_cfr import FixedParameterCfr
 from research2018.online_learner import OnlineLearner
 
 from robust_offline_contextual_bandits import cache
-from robust_offline_contextual_bandits.data import load_list
+from research2018.data import load_list
 from robust_offline_contextual_bandits.plotting import \
     tableu20_color_table, \
     line_style_table

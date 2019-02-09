@@ -1,6 +1,6 @@
 import tensorflow as tf
 import numpy as np
-from robust_offline_contextual_bandits.data import load_or_save, load_list
+from research2018.data import load_or_save, load_list
 from robust_offline_contextual_bandits import cache
 from robust_offline_contextual_bandits.tf_np import reset_random
 from robust_offline_contextual_bandits.plotting import tableu20_color_table

@@ -13,7 +13,7 @@ try:
 except:
     files = None
 
-from robust_offline_contextual_bandits.data import mean_and_t_ci
+from research2018.data import mean_and_t_ci
 
 
 def tableu20_color_table():

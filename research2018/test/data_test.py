@@ -1,5 +1,5 @@
 import tensorflow as tf
-from robust_offline_contextual_bandits.data import TaggedData, TaggedDatum
+from research2018.data import TaggedData, TaggedDatum
 
 
 class DataTest(tf.test.TestCase):
