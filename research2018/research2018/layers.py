@@ -185,6 +185,15 @@ class ResDenseFlipout(ResMixin, tfp.layers.DenseFlipout):
     pass
 
 
+class ResDenseLocalReparameterization(ResMixin,
+                                      tfp.layers.DenseLocalReparameterization):
+    pass
+
+
+class ResDenseReparameterization(ResMixin, tfp.layers.DenseReparameterization):
+    pass
+
+
 class ResConvolution2DReparameterization(
         ResMixin, tfp.layers.Convolution2DReparameterization):
     pass
