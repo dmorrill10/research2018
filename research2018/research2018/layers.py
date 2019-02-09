@@ -10,7 +10,9 @@ class ResMixin(object):
         self._input_transformation = input_transformation
 
     def call(self, inputs):
-        return super().call(inputs) + self._input_transformation(inputs)
+        return tfk.layers.add(
+            [super().call(inputs),
+             self._input_transformation(inputs)])
 
 
 def mvn_posterior_fn(dtype,
