@@ -189,3 +189,52 @@ def undo_subtract_mean_scale_to_zero_one_np(x, ref_min, ref_max, ref_mean):
     min_obs = np.minimum(np.min(abs_x, axis=0, keepdims=True), ref_min)
     delta_obs = max_obs - min_obs
     return x * delta_obs + ref_mean
+
+
+class Dataset(object):
+    def __init__(self, x, y, reward):
+        self.x = x
+        self.y = y
+        self.reward = reward
+        self.reset()
+
+    def __len__(self):
+        return len(self.x)
+
+    def num_batches(self):
+        if self.batch_size is None:
+            return None
+        else:
+            return int(np.floor(len(self.x) / float(self.batch_size)))
+
+    def dataset(self):
+        return tf.data.Dataset.from_tensor_slices((self.x, self.reward))
+
+    def reset(self):
+        self.data = self.dataset()
+        self.batch_size = None
+        return self
+
+    def shuffle(self):
+        self.data = self.data.shuffle(buffer_size=len(self))
+        return self
+
+    def batch(self, n=None):
+        if n is None:
+            n = len(self)
+        self.data = self.data.batch(n)
+        self.batch_size = n
+        return self
+
+    def repeat(self, n=None):
+        self.data = self.data.repeat(n)
+        return self
+
+    def __call__(self):
+        return self.data
+
+    def clone(self):
+        return self.__class__(self.x, self.y, self.reward)
+
+    def make_one_shot_iterator(self):
+        return self.data.make_one_shot_iterator()
