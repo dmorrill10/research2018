@@ -321,12 +321,14 @@ class GradEvBasedVariableOptimizer(VariableOptimizer):
 
 
 class StaticScaleMixin(object):
-    def __init__(self, *args, scale=1, **kwargs):
-        self._scale = float(scale)
+    def __init__(self, *args, scale=1, fractional_scale=False, **kwargs):
+        self._scale = scale
+        self._fractional_scale = fractional_scale
         super(StaticScaleMixin, self).__init__(*args, **kwargs)
 
     def scales(self):
-        return self._scale
+        return (self._scale * self.num_rows()
+                if self._fractional_scale else self._scale)
 
 
 class RmBevL1VariableOptimizer(StaticScaleMixin, RegretBasedVariableOptimizer):
