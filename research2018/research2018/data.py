@@ -238,3 +238,17 @@ class Dataset(object):
 
     def make_one_shot_iterator(self):
         return self.data.make_one_shot_iterator()
+
+
+class History(object):
+    @classmethod
+    def load(cls, name):
+        return cls(*np.load(name).tolist())
+
+    def __init__(self, epoch, history):
+        self.epoch = epoch
+        self.history = history
+
+    def save(self, name):
+        np.save(name, np.array([self.epoch, self.history], dtype='object'))
+        return self
