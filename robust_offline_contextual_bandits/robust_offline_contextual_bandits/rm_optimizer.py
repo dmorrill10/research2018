@@ -281,11 +281,13 @@ class GradEvBasedVariableOptimizer(VariableOptimizer):
                  ev_initializer=tf.zeros_initializer(),
                  momentum=0.0,
                  clipvalue=None,
+                 use_linear_weight=False,
                  **kwargs):
         self._utility_initializer = utility_initializer
         self._ev_initializer = ev_initializer
         self._momentum = momentum
         self._clipvalue = clipvalue
+        self._use_linear_weight = use_linear_weight
         super(GradEvBasedVariableOptimizer, self).__init__(*args, **kwargs)
         with self.name_scope():
             self.initializer = self._create_slots()
@@ -300,14 +302,20 @@ class GradEvBasedVariableOptimizer(VariableOptimizer):
         tf.summary.histogram('avg_ev', ev)
         return tf.group(utility.initializer, ev.initializer)
 
-    def utility(self, grad, scale=1.0, descale=True):
-        m = self._momentum * self.get_slot('avg_utility')
-        if not descale: m = m / scale
+    def utility(self, grad, scale=1.0, descale=True, t=1):
         if self._clipvalue is not None:
             grad = tf.where(
                 tf.greater(tf.abs(grad), self._clipvalue),
                 tf.sign(grad) * self._clipvalue, grad)
-        return -grad + m
+        if self._momentum is not None and self._momentum > 0:
+            m = self._momentum * self.get_slot('avg_utility')
+            if not descale: m = m / scale
+            u = m - (1.0 - self._momentum) * grad
+        else:
+            u = -grad
+        if self._use_linear_weight:
+            u = t * u
+        return u
 
     def updated_utility(self, utility, scale=1.0, descale=True, t=1):
         cu = self.get_slot('avg_utility')
@@ -513,9 +521,9 @@ class RmMixin(object):
 
     def dense_update(self, grad, num_updates=0):
         grad = self._with_fixed_dimensions(grad)
-        utility = self.utility(grad, scale=self.scales())
-
         t = tf.cast(num_updates + 1, tf.float32)
+        utility = self.utility(grad, scale=self.scales(), t=t)
+
         ev = self.updated_ev(utility, scale=self.scales(), t=t)
         utility = self.updated_utility(utility, scale=self.scales(), t=t)
 
@@ -555,7 +563,8 @@ class _RmExtraRegularization(object):
 
     def dense_update(self, grad, num_updates=0):
         grad = self._with_fixed_dimensions(grad)
-        iutility = self.utility(grad, scale=self.scales())
+        t = tf.cast(num_updates + 1, tf.float32)
+        iutility = self.utility(grad, scale=self.scales(), t=t)
 
         avg_ev = self.get_slot('avg_ev')
         iev = self.instantaneous_ev(iutility, scale=self.scales())
@@ -564,7 +573,6 @@ class _RmExtraRegularization(object):
         allow_negative = not self.non_negative
         if allow_negative: iregret.append(-iutility - iev)
 
-        t = tf.cast(num_updates + 1, tf.float32)
         avg_ev = avg_ev.assign_add(
             (iev - avg_ev) / t, use_locking=self._use_locking)
 
