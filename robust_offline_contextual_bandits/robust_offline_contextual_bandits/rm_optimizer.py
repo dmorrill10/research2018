@@ -17,8 +17,12 @@ def tile_to_dims(t, num_dims):
     return tf.tile(t, [num_dims, 1])
 
 
-def with_fixed_dimensions(t, independent_dimensions=False):
-    if len(t.shape) < 2:
+def with_fixed_dimensions(t,
+                          independent_dimensions=False,
+                          dependent_columns=False):
+    if dependent_columns:
+        return tf.reshape(t, [tf.size(t), 1])
+    elif len(t.shape) < 2:
         return tf.expand_dims(t, axis=0)
     else:
         num_columns = t.shape[-1].value
@@ -72,9 +76,12 @@ class VariableOptimizer(object):
                  var,
                  use_locking=False,
                  name=None,
-                 independent_dimensions=False):
+                 independent_dimensions=False,
+                 dependent_columns=False):
+        assert not (independent_dimensions and dependent_columns)
         self._var = var
         self._independent_dimensions = independent_dimensions
+        self._dependent_columns = dependent_columns
         self.shape = tuple(v.value for v in self._matrix_var.shape)
         self._use_locking = use_locking
         self.name = type(self).__name__ if name is None else name
@@ -82,7 +89,9 @@ class VariableOptimizer(object):
 
     def _with_fixed_dimensions(self, v):
         return with_fixed_dimensions(
-            v, independent_dimensions=self._independent_dimensions)
+            v,
+            independent_dimensions=self._independent_dimensions,
+            dependent_columns=self._dependent_columns)
 
     @property
     def _matrix_var(self):
