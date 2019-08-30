@@ -3,34 +3,7 @@ import tensorflow as tf
 import numpy as np
 from tensorflow.python.training import optimizer
 from tensorflow.python.ops.resource_variable_ops import ResourceVariable
-
-
-def sum_over_dims(t):
-    return tf.reduce_sum(t, axis=0, keep_dims=True)
-
-
-def tile_to_dims(t, num_dims):
-    return tf.tile(t, [num_dims, 1])
-
-
-def with_fixed_dimensions(t,
-                          independent_dimensions=False,
-                          dependent_columns=False):
-    if dependent_columns:
-        return tf.reshape(t, [tf.size(t), 1])
-    elif len(t.shape) < 2:
-        return tf.expand_dims(t, axis=0)
-    else:
-        num_columns = t.shape[-1].value
-        num_dimensions = (
-            np.prod([t.shape[i].value for i in range(len(t.shape) - 1)])
-            if len(t.shape) > 2 else
-            t.shape[0].value
-        )  # yapf:disable
-        if independent_dimensions:
-            num_columns = num_dimensions * num_columns
-            num_dimensions = 1
-        return tf.reshape(t, [num_dimensions, num_columns])
+from robust_offline_contextual_bandits import optimizers
 
 
 def rm(utility,
@@ -44,8 +17,8 @@ def rm(utility,
     p = tf.nn.relu(utility - ev)
     if allow_negative: d = tf.nn.relu(-utility - ev)
 
-    z = sum_over_dims(p)
-    if allow_negative: z += sum_over_dims(d)
+    z = optimizers.sum_over_dims(p)
+    if allow_negative: z += optimizers.sum_over_dims(d)
     if regularization_bonus is not None:
         z = z + regularization_bonus
 
@@ -59,7 +32,7 @@ def rm(utility,
 
     c = tf.div_no_nan(scale, z)
 
-    if z.shape[0].value == 1: z = tile_to_dims(z, p.shape[0].value)
+    if z.shape[0].value == 1: z = optimizers.tile_to_dims(z, p.shape[0].value)
     default = (
         tf.zeros_like(z) if allow_negative or p.shape[0].value < 2
         else tf.fill(z.shape, 1.0 / p.shape[0].value)
@@ -85,7 +58,7 @@ class VariableOptimizer(object):
         self._slots = {}
 
     def _with_fixed_dimensions(self, v):
-        return with_fixed_dimensions(
+        return optimizers.with_fixed_dimensions(
             v,
             independent_dimensions=self._independent_dimensions,
             dependent_columns=self._dependent_columns)
@@ -393,8 +366,8 @@ class RmBevL1VariableOptimizer(StaticScaleMixin, RegretBasedVariableOptimizer):
         allow_negative = not self.non_negative
         if allow_negative: d = tf.nn.relu(next_regret_down)
 
-        z = sum_over_dims(p)
-        if allow_negative: z += sum_over_dims(d)
+        z = optimizers.sum_over_dims(p)
+        if allow_negative: z += optimizers.sum_over_dims(d)
         if regularization_bonus is not None:
             z = (z + regularization_bonus
                  if self._additive_regularization else tf.maximum(
@@ -405,7 +378,7 @@ class RmBevL1VariableOptimizer(StaticScaleMixin, RegretBasedVariableOptimizer):
 
         c = tf.div_no_nan(scale, z)
 
-        if z.shape[0].value == 1: z = tile_to_dims(z, p.shape[0].value)
+        if z.shape[0].value == 1: z = optimizers.tile_to_dims(z, p.shape[0].value)
         default = (
             tf.zeros_like(z) if allow_negative or p.shape[0].value < 2
             else tf.fill(z.shape, 1.0 / p.shape[0].value)
