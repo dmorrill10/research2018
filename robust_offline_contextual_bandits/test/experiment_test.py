@@ -1,8 +1,5 @@
 import tensorflow as tf
-try:
-    tf.enable_eager_execution()
-except:
-    pass
+tf.enable_eager_execution()
 import numpy as np
 from robust_offline_contextual_bandits.experiment import \
     PlateauRewardRealityExperiment, \

@@ -128,6 +128,7 @@ class GradientDescentVariableOptimizer(VariableOptimizer):
 
 class AdamVariableOptimizer(VariableOptimizer):
     '''Adam optimizer.'''
+
     def __init__(self,
                  *args,
                  lr=0.001,
