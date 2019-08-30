@@ -2,8 +2,8 @@ import tensorflow as tf
 tf.enable_eager_execution()
 from tensorflow.python.ops.resource_variable_ops import ResourceVariable
 import numpy as np
+from robust_offline_contextual_bandits.optimizers import CompositeOptimizer
 from robust_offline_contextual_bandits.rm_optimizer import \
-    CompositeOptimizer, \
     RmL1VariableOptimizer, \
     RmInfVariableOptimizer, \
     RmSimVariableOptimizer, \
