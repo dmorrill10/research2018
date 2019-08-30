@@ -1,6 +1,5 @@
 from inspect import signature
 import tensorflow as tf
-import numpy as np
 from tensorflow.python.training import optimizer
 from tensorflow.python.ops.resource_variable_ops import ResourceVariable
 from robust_offline_contextual_bandits import optimizers
@@ -75,8 +74,9 @@ class VariableOptimizer(object):
 
     def _get_or_make_slot(self, val, name, **kwargs):
         with tf.variable_scope(self.name + '/' + name):
-            self._slots[name] = ResourceVariable(
-                val, trainable=False, **kwargs)
+            self._slots[name] = ResourceVariable(val,
+                                                 trainable=False,
+                                                 **kwargs)
         return self._slots[name]
 
     def get_slot(self, name):
@@ -111,9 +111,8 @@ class GradientDescentVariableOptimizer(VariableOptimizer):
 
     def dense_update(self, grad, num_updates=0):
         if self._clipvalue is not None:
-            grad = tf.where(
-                tf.greater(tf.abs(grad), self._clipvalue),
-                tf.sign(grad) * self._clipvalue, grad)
+            grad = tf.where(tf.greater(tf.abs(grad), self._clipvalue),
+                            tf.sign(grad) * self._clipvalue, grad)
         ss = self._step_size
         if self._linear_step_size_decrease:
             t = tf.cast(num_updates + 1, tf.float32)
@@ -126,7 +125,6 @@ class GradientDescentVariableOptimizer(VariableOptimizer):
 
 class AdamVariableOptimizer(VariableOptimizer):
     '''Adam optimizer.'''
-
     def __init__(self,
                  *args,
                  lr=0.001,
@@ -146,8 +144,10 @@ class AdamVariableOptimizer(VariableOptimizer):
         beta_1: float, 0 < beta < 1. Momentum weight. Generally close to 1.
         beta_2: float, 0 < beta < 1. Adagrad weight. Generally close to 1.
         epsilon: float >= 0. Fuzz factor. If None, defaults to K.epsilon().
-        clipvalue: float > 0. Cap on the size of gradient values. If None, defaults to infinite.
-        amsgrad: bool. If True, uses the AMSGrad intermediate max step to ensure that the AdaGrad weights are non-decreasing.
+        clipvalue: float > 0. Cap on the size of gradient values. If None,
+            defaults to infinite.
+        amsgrad: bool. If True, uses the AMSGrad intermediate max step to
+            ensure that the AdaGrad weights are non-decreasing.
         '''
         self._lr = lr
         self._beta_1 = beta_1
@@ -179,9 +179,8 @@ class AdamVariableOptimizer(VariableOptimizer):
 
     def dense_update(self, grad, num_updates=0):
         if self._clipvalue is not None:
-            grad = tf.where(
-                tf.greater(tf.abs(grad), self._clipvalue),
-                tf.sign(grad) * self._clipvalue, grad)
+            grad = tf.where(tf.greater(tf.abs(grad), self._clipvalue),
+                            tf.sign(grad) * self._clipvalue, grad)
         m = self.get_slot('m')
         v = self.get_slot('v')
 
@@ -210,9 +209,8 @@ class AdamVariableOptimizer(VariableOptimizer):
             optional_updates.append(v_hat)
         lr = self._lr / (tf.sqrt(v_hat) + self._epsilon)
 
-        return tf.group(
-            self._var.assign_add(-lr * m_hat), next_m, next_v,
-            *optional_updates)
+        return tf.group(self._var.assign_add(-lr * m_hat), next_m, next_v,
+                        *optional_updates)
 
 
 class RegretBasedVariableOptimizer(VariableOptimizer):
@@ -240,9 +238,8 @@ class RegretBasedVariableOptimizer(VariableOptimizer):
 
     def utility(self, grad):
         if self._clipvalue is not None:
-            grad = tf.where(
-                tf.greater(tf.abs(grad), self._clipvalue),
-                tf.sign(grad) * self._clipvalue, grad)
+            grad = tf.where(tf.greater(tf.abs(grad), self._clipvalue),
+                            tf.sign(grad) * self._clipvalue, grad)
         return -grad
 
     def dense_update(self, grad, num_updates=0):
@@ -268,8 +265,8 @@ class GradEvBasedVariableOptimizer(VariableOptimizer):
             self.initializer = self._create_slots()
 
     def _create_slots(self):
-        utility = self._get_or_make_slot(
-            self._utility_initializer(self.shape), 'avg_utility')
+        utility = self._get_or_make_slot(self._utility_initializer(self.shape),
+                                         'avg_utility')
         ev = self._get_or_make_slot(
             self._ev_initializer((1, self.num_columns())), 'avg_ev')
 
@@ -279,9 +276,8 @@ class GradEvBasedVariableOptimizer(VariableOptimizer):
 
     def utility(self, grad, scale=1.0, descale=True, t=1):
         if self._clipvalue is not None:
-            grad = tf.where(
-                tf.greater(tf.abs(grad), self._clipvalue),
-                tf.sign(grad) * self._clipvalue, grad)
+            grad = tf.where(tf.greater(tf.abs(grad), self._clipvalue),
+                            tf.sign(grad) * self._clipvalue, grad)
         if self._momentum is not None and self._momentum > 0:
             m = self._momentum * self.get_slot('avg_utility')
             if not descale: m = m / scale
@@ -310,8 +306,8 @@ class StaticScaleMixin(object):
         super(StaticScaleMixin, self).__init__(*args, **kwargs)
 
     def scales(self):
-        return (self._scale * self.num_rows()
-                if self._fractional_scale else self._scale)
+        return (self._scale *
+                self.num_rows() if self._fractional_scale else self._scale)
 
 
 class RmBevL1VariableOptimizer(StaticScaleMixin, RegretBasedVariableOptimizer):
@@ -329,7 +325,8 @@ class RmBevL1VariableOptimizer(StaticScaleMixin, RegretBasedVariableOptimizer):
         self._regularization_weight = regularization_weight
         self._additive_regularization = additive_regularization
         self._regularization_initializer = regularization_initializer
-        self._avoid_steps_beyond_max_gradient_norm = avoid_steps_beyond_max_gradient_norm
+        self._avoid_steps_beyond_max_gradient_norm = (
+            avoid_steps_beyond_max_gradient_norm)
         super().__init__(*args, **kwargs)
 
     def updated_regularization_bonus(self, *iregret, t=1):
@@ -345,14 +342,14 @@ class RmBevL1VariableOptimizer(StaticScaleMixin, RegretBasedVariableOptimizer):
 
     def _create_slots(self):
         init = super()._create_slots()
-        avg_ev = self._get_or_make_slot(
-            tf.zeros((1, self.num_columns())), 'avg_ev')
+        avg_ev = self._get_or_make_slot(tf.zeros((1, self.num_columns())),
+                                        'avg_ev')
         tf.summary.histogram('avg_ev', avg_ev)
 
         init = [init, avg_ev.initializer]
         if self._avoid_steps_beyond_max_gradient_norm:
-            max_gradient_norm = self._get_or_make_slot(
-                tf.zeros([]), 'max_gradient_norm')
+            max_gradient_norm = self._get_or_make_slot(tf.zeros([]),
+                                                       'max_gradient_norm')
             tf.summary.histogram('max_gradient_norm', max_gradient_norm)
             init.append(max_gradient_norm.initializer)
         return tf.group(*init)
@@ -369,16 +366,16 @@ class RmBevL1VariableOptimizer(StaticScaleMixin, RegretBasedVariableOptimizer):
         z = optimizers.sum_over_dims(p)
         if allow_negative: z += optimizers.sum_over_dims(d)
         if regularization_bonus is not None:
-            z = (z + regularization_bonus
-                 if self._additive_regularization else tf.maximum(
-                     z, regularization_bonus))
+            z = (z + regularization_bonus if self._additive_regularization else
+                 tf.maximum(z, regularization_bonus))
 
         delta = p
         if allow_negative: delta -= d
 
         c = tf.div_no_nan(scale, z)
 
-        if z.shape[0].value == 1: z = optimizers.tile_to_dims(z, p.shape[0].value)
+        if z.shape[0].value == 1:
+            z = optimizers.tile_to_dims(z, p.shape[0].value)
         default = (
             tf.zeros_like(z) if allow_negative or p.shape[0].value < 2
             else tf.fill(z.shape, 1.0 / p.shape[0].value)
@@ -393,8 +390,8 @@ class RmBevL1VariableOptimizer(StaticScaleMixin, RegretBasedVariableOptimizer):
         avg_ev = self.get_slot('avg_ev')
 
         t = tf.cast(num_updates + 1, tf.float32)
-        next_avg_ev = avg_ev.assign_add(
-            (iev - avg_ev) / t, use_locking=self._use_locking)
+        next_avg_ev = avg_ev.assign_add((iev - avg_ev) / t,
+                                        use_locking=self._use_locking)
 
         regret_up = self.get_slot('cumulative_regret_up')
         regret_down = self.get_slot('cumulative_regret_down')
@@ -432,8 +429,9 @@ class RmBevL1VariableOptimizer(StaticScaleMixin, RegretBasedVariableOptimizer):
                 tf.logical_and(regret_down_is_neg, neg_utility_is_gt_ev),
                 self._discount * next_regret_down, next_regret_down)
 
-        regularization_bonus = self.updated_regularization_bonus(
-            iregret_up, iregret_down, t=t)
+        regularization_bonus = self.updated_regularization_bonus(iregret_up,
+                                                                 iregret_down,
+                                                                 t=t)
 
         scale = self.scales()
         if self._avoid_steps_beyond_max_gradient_norm:
@@ -442,21 +440,20 @@ class RmBevL1VariableOptimizer(StaticScaleMixin, RegretBasedVariableOptimizer):
                 tf.maximum(tf.reduce_sum(tf.abs(grad)), max_gradient_norm),
                 use_locking=self._use_locking)
             scale = tf.minimum(scale, max_gradient_norm)
-        next_var = self._var.assign(
-            tf.reshape(
-                self._next_matrix_var(
-                    next_regret_up,
-                    next_regret_down,
-                    scale=scale,
-                    regularization_bonus=self.scaled_regularization_bonus(
-                        regularization_bonus, t=t)), self._var.shape),
-            use_locking=self._use_locking)
+        next_var = self._var.assign(tf.reshape(
+            self._next_matrix_var(
+                next_regret_up,
+                next_regret_down,
+                scale=scale,
+                regularization_bonus=self.scaled_regularization_bonus(
+                    regularization_bonus, t=t)), self._var.shape),
+                                    use_locking=self._use_locking)
 
         updates = [
             next_var,
             regret_up.assign(next_regret_up, use_locking=self._use_locking),
-            regret_down.assign(
-                next_regret_down, use_locking=self._use_locking), next_avg_ev
+            regret_down.assign(next_regret_down,
+                               use_locking=self._use_locking), next_avg_ev
         ]
         if regularization_bonus is not None:
             updates.append(regularization_bonus)
@@ -499,20 +496,19 @@ class RmMixin(object):
         ev = self.updated_ev(utility, scale=self.scales(), t=t)
         utility = self.updated_utility(utility, scale=self.scales(), t=t)
 
-        next_var = self._var.assign(
-            tf.reshape(self.rm(utility, ev), self._var.shape),
-            use_locking=self._use_locking)
+        next_var = self._var.assign(tf.reshape(self.rm(utility, ev),
+                                               self._var.shape),
+                                    use_locking=self._use_locking)
 
         return tf.group(next_var, utility, ev)
 
     def rm(self, utility, ev, **kwargs):
-        return rm(
-            utility,
-            ev,
-            scale=self.scales(),
-            relax_simplex_constraint=self._relax_simplex_constraint,
-            non_negative=self.non_negative,
-            **kwargs)
+        return rm(utility,
+                  ev,
+                  scale=self.scales(),
+                  relax_simplex_constraint=self._relax_simplex_constraint,
+                  non_negative=self.non_negative,
+                  **kwargs)
 
 
 class _RmExtraRegularization(object):
@@ -530,8 +526,8 @@ class _RmExtraRegularization(object):
 
     def scaled_regularization_bonus(self, bonus, t=1):
         if bonus is None: return None
-        return (tf.square(self.scales()) *
-                (self._regularization_weight / t) * bonus)
+        return (tf.square(self.scales()) * (self._regularization_weight / t) *
+                bonus)
 
     def dense_update(self, grad, num_updates=0):
         grad = self._with_fixed_dimensions(grad)
@@ -545,23 +541,21 @@ class _RmExtraRegularization(object):
         allow_negative = not self.non_negative
         if allow_negative: iregret.append(-iutility - iev)
 
-        avg_ev = avg_ev.assign_add(
-            (iev - avg_ev) / t, use_locking=self._use_locking)
+        avg_ev = avg_ev.assign_add((iev - avg_ev) / t,
+                                   use_locking=self._use_locking)
 
         avg_utility = self.get_slot('avg_utility')
-        avg_utility = avg_utility.assign_add(
-            (iutility - avg_utility) / t, use_locking=self._use_locking)
+        avg_utility = avg_utility.assign_add((iutility - avg_utility) / t,
+                                             use_locking=self._use_locking)
 
         regularization_bonus = self.updated_regularization_bonus(*iregret, t=t)
 
-        next_var = self._var.assign(
-            tf.reshape(
-                self.rm(
-                    avg_utility,
+        next_var = self._var.assign(tf.reshape(
+            self.rm(avg_utility,
                     avg_ev,
                     regularization_bonus=self.scaled_regularization_bonus(
                         regularization_bonus, t=t)), self._var.shape),
-            use_locking=self._use_locking)
+                                    use_locking=self._use_locking)
 
         return tf.group(next_var, avg_utility, avg_ev, regularization_bonus)
 
@@ -618,8 +612,8 @@ class _AvgRegretRegularization(object):
         max_iregret = tf.nn.relu(iregret[0])
         for i in range(1, len(iregret)):
             max_iregret = tf.maximum(max_iregret, tf.nn.relu(iregret[i]))
-        return avg_pos_regret.assign_add(
-            (max_iregret - avg_pos_regret) / t, use_locking=self._use_locking)
+        return avg_pos_regret.assign_add((max_iregret - avg_pos_regret) / t,
+                                         use_locking=self._use_locking)
 
 
 class RmSimMixin(RmMixin):
@@ -656,21 +650,24 @@ class RmNnVariableOptimizer(RmInfVariableOptimizer):
         return super().scales() / 2.0
 
 
-class RmL1AmrrVariableOptimizer(
-        _AvgMaxRegretRegularization, _RmExtraRegularization, RmMixin,
-        StaticScaleMixin, GradEvBasedVariableOptimizer):
+class RmL1AmrrVariableOptimizer(_AvgMaxRegretRegularization,
+                                _RmExtraRegularization, RmMixin,
+                                StaticScaleMixin,
+                                GradEvBasedVariableOptimizer):
     pass
 
 
-class RmSimAmrrVariableOptimizer(
-        _AvgMaxRegretRegularization, _RmExtraRegularization, RmSimMixin,
-        StaticScaleMixin, GradEvBasedVariableOptimizer):
+class RmSimAmrrVariableOptimizer(_AvgMaxRegretRegularization,
+                                 _RmExtraRegularization, RmSimMixin,
+                                 StaticScaleMixin,
+                                 GradEvBasedVariableOptimizer):
     pass
 
 
-class RmInfAmrrVariableOptimizer(
-        _AvgMaxRegretRegularization, _RmExtraRegularization, RmMixin,
-        StaticScaleMixin, GradEvBasedVariableOptimizer):
+class RmInfAmrrVariableOptimizer(_AvgMaxRegretRegularization,
+                                 _RmExtraRegularization, RmMixin,
+                                 StaticScaleMixin,
+                                 GradEvBasedVariableOptimizer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, independent_dimensions=True, **kwargs)
 
@@ -680,21 +677,24 @@ class RmNnAmrrVariableOptimizer(_AvgMaxRegretRegularization,
     pass
 
 
-class RmL1AmarrVariableOptimizer(
-        _AvgMaxAbsRegretRegularization, _RmExtraRegularization, RmMixin,
-        StaticScaleMixin, GradEvBasedVariableOptimizer):
+class RmL1AmarrVariableOptimizer(_AvgMaxAbsRegretRegularization,
+                                 _RmExtraRegularization, RmMixin,
+                                 StaticScaleMixin,
+                                 GradEvBasedVariableOptimizer):
     pass
 
 
-class RmSimAmarrVariableOptimizer(
-        _AvgMaxAbsRegretRegularization, _RmExtraRegularization, RmSimMixin,
-        StaticScaleMixin, GradEvBasedVariableOptimizer):
+class RmSimAmarrVariableOptimizer(_AvgMaxAbsRegretRegularization,
+                                  _RmExtraRegularization, RmSimMixin,
+                                  StaticScaleMixin,
+                                  GradEvBasedVariableOptimizer):
     pass
 
 
-class RmInfAmarrVariableOptimizer(
-        _AvgMaxAbsRegretRegularization, _RmExtraRegularization, RmMixin,
-        StaticScaleMixin, GradEvBasedVariableOptimizer):
+class RmInfAmarrVariableOptimizer(_AvgMaxAbsRegretRegularization,
+                                  _RmExtraRegularization, RmMixin,
+                                  StaticScaleMixin,
+                                  GradEvBasedVariableOptimizer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, independent_dimensions=True, **kwargs)
 
@@ -711,15 +711,17 @@ class RmL1ArrVariableOptimizer(_AvgRegretRegularization,
     pass
 
 
-class RmSimArrVariableOptimizer(
-        _AvgRegretRegularization, _RmExtraRegularization, RmSimMixin,
-        StaticScaleMixin, GradEvBasedVariableOptimizer):
+class RmSimArrVariableOptimizer(_AvgRegretRegularization,
+                                _RmExtraRegularization, RmSimMixin,
+                                StaticScaleMixin,
+                                GradEvBasedVariableOptimizer):
     pass
 
 
-class RmInfArrVariableOptimizer(
-        _AvgRegretRegularization, _RmExtraRegularization, RmMixin,
-        StaticScaleMixin, GradEvBasedVariableOptimizer):
+class RmInfArrVariableOptimizer(_AvgRegretRegularization,
+                                _RmExtraRegularization, RmMixin,
+                                StaticScaleMixin,
+                                GradEvBasedVariableOptimizer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, independent_dimensions=True, **kwargs)
 
@@ -785,9 +787,9 @@ class CompositeOptimizer(optimizer.Optimizer):
                  use_locking=False,
                  name=None,
                  var_list=[]):
-        super(CompositeOptimizer, self).__init__(use_locking,
-                                                 type(self).__name__
-                                                 if name is None else name)
+        super(CompositeOptimizer,
+              self).__init__(use_locking,
+                             type(self).__name__ if name is None else name)
         self._new_opt = new_variable_optimizer
         self._optimizers = None
         self.initializer = None
@@ -820,8 +822,8 @@ class CompositeOptimizer(optimizer.Optimizer):
         if self._optimizers is None: self._create_slots(var_list)
         updates = []
         for i in range(len(grads)):
-            updates.append(
-                self._apply_gradients(self._optimizers[i], grads[i]))
+            updates.append(self._apply_gradients(self._optimizers[i],
+                                                 grads[i]))
         updates.append(
             self._num_updates.assign_add(1, use_locking=self._use_locking))
         return tf.group(*updates)
