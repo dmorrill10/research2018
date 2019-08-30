@@ -213,3 +213,89 @@ class AdamVariableOptimizer(VariableOptimizer):
 
         return tf.group(self._var.assign_add(-lr * m_hat), next_m, next_v,
                         *optional_updates)
+
+
+class RegretBasedVariableOptimizer(VariableOptimizer):
+    def __init__(self,
+                 *args,
+                 initializer=tf.zeros_initializer(),
+                 clipvalue=None,
+                 **kwargs):
+        self._initializer = initializer
+        self._clipvalue = clipvalue
+        super(RegretBasedVariableOptimizer, self).__init__(*args, **kwargs)
+        with self.name_scope():
+            self.initializer = self._create_slots()
+
+    def _create_slots(self):
+        cumulative_regret_up = self._get_or_make_slot(
+            self._initializer(self.shape), 'cumulative_regret_up')
+        cumulative_regret_down = self._get_or_make_slot(
+            self._initializer(self.shape), 'cumulative_regret_down')
+
+        tf.summary.histogram('cumulative_regret_up', cumulative_regret_up)
+        tf.summary.histogram('cumulative_regret_down', cumulative_regret_down)
+        return tf.group(cumulative_regret_up.initializer,
+                        cumulative_regret_down.initializer)
+
+    def utility(self, grad):
+        if self._clipvalue is not None:
+            grad = tf.where(tf.greater(tf.abs(grad), self._clipvalue),
+                            tf.sign(grad) * self._clipvalue, grad)
+        return -grad
+
+    def dense_update(self, grad, num_updates=0):
+        raise NotImplementedError('Please override.')
+
+
+class GradEvBasedVariableOptimizer(VariableOptimizer):
+    def __init__(self,
+                 *args,
+                 utility_initializer=tf.zeros_initializer(),
+                 ev_initializer=tf.zeros_initializer(),
+                 momentum=0.0,
+                 clipvalue=None,
+                 use_linear_weight=False,
+                 **kwargs):
+        self._utility_initializer = utility_initializer
+        self._ev_initializer = ev_initializer
+        self._momentum = momentum
+        self._clipvalue = clipvalue
+        self._use_linear_weight = use_linear_weight
+        super(GradEvBasedVariableOptimizer, self).__init__(*args, **kwargs)
+        with self.name_scope():
+            self.initializer = self._create_slots()
+
+    def _create_slots(self):
+        utility = self._get_or_make_slot(self._utility_initializer(self.shape),
+                                         'avg_utility')
+        ev = self._get_or_make_slot(
+            self._ev_initializer((1, self.num_columns())), 'avg_ev')
+
+        tf.summary.histogram('avg_utility', utility)
+        tf.summary.histogram('avg_ev', ev)
+        return tf.group(utility.initializer, ev.initializer)
+
+    def utility(self, grad, scale=1.0, descale=True, t=1):
+        if self._clipvalue is not None:
+            grad = tf.where(tf.greater(tf.abs(grad), self._clipvalue),
+                            tf.sign(grad) * self._clipvalue, grad)
+        if self._momentum is not None and self._momentum > 0:
+            m = self._momentum * self.get_slot('avg_utility')
+            if not descale: m = m / scale
+            u = m - (1.0 - self._momentum) * grad
+        else:
+            u = -grad
+        if self._use_linear_weight:
+            u = t * u
+        return u
+
+    def updated_utility(self, utility, scale=1.0, descale=True, t=1):
+        cu = self.get_slot('avg_utility')
+        if not descale: utility = scale * utility
+        return cu.assign_add((utility - cu) / t, use_locking=self._use_locking)
+
+    def updated_ev(self, utility, scale=1.0, descale=True, t=1):
+        ev = self.get_slot('avg_ev')
+        iev = self.instantaneous_ev(utility, scale=scale, descale=descale)
+        return ev.assign_add((iev - ev) / t, use_locking=self._use_locking)
