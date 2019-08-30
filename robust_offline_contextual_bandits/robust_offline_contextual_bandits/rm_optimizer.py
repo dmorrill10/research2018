@@ -82,6 +82,7 @@ class VariableOptimizer(object):
         self._var = var
         self._independent_dimensions = independent_dimensions
         self._dependent_columns = dependent_columns
+        self._matrix_var = self._with_fixed_dimensions(var)
         self.shape = tuple(v.value for v in self._matrix_var.shape)
         self._use_locking = use_locking
         self.name = type(self).__name__ if name is None else name
@@ -92,10 +93,6 @@ class VariableOptimizer(object):
             v,
             independent_dimensions=self._independent_dimensions,
             dependent_columns=self._dependent_columns)
-
-    @property
-    def _matrix_var(self):
-        return self._with_fixed_dimensions(self._var)
 
     def variables(self):
         return ([] if len(self._slots) < 1 else list(
@@ -502,10 +499,7 @@ class RmBevL1VariableOptimizer(StaticScaleMixin, RegretBasedVariableOptimizer):
 class RmBevNnVariableOptimizer(RmBevL1VariableOptimizer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, independent_dimensions=True, **kwargs)
-
-    @property
-    def _matrix_var(self):
-        return super()._matrix_var - self.scales()
+        self._matrix_var = self._matrix_var - self.scales()
 
     def _next_matrix_var(self, *args, **kwargs):
         return super()._next_matrix_var(*args, **kwargs) + self.scales()
@@ -682,9 +676,9 @@ class RmInfVariableOptimizer(RmMixin, StaticScaleMixin,
 
 
 class RmNnVariableOptimizer(RmInfVariableOptimizer):
-    @property
-    def _matrix_var(self):
-        return super()._matrix_var - self.scales()
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._matrix_var = self._matrix_var - self.scales()
 
     def rm(self, *args, **kwargs):
         return super().rm(*args, **kwargs) + self.scales()
