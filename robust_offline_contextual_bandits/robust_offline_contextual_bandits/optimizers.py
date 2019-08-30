@@ -299,3 +299,14 @@ class GradEvBasedVariableOptimizer(VariableOptimizer):
         ev = self.get_slot('avg_ev')
         iev = self.instantaneous_ev(utility, scale=scale, descale=descale)
         return ev.assign_add((iev - ev) / t, use_locking=self._use_locking)
+
+
+class StaticScaleMixin(object):
+    def __init__(self, *args, scale=1, fractional_scale=False, **kwargs):
+        self._scale = scale
+        self._fractional_scale = fractional_scale
+        super(StaticScaleMixin, self).__init__(*args, **kwargs)
+
+    def scales(self):
+        return (self._scale *
+                self.num_rows() if self._fractional_scale else self._scale)

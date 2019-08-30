@@ -39,18 +39,7 @@ def rm(utility,
     return tf.where(tf.greater(z, 0), c * delta, default)
 
 
-class StaticScaleMixin(object):
-    def __init__(self, *args, scale=1, fractional_scale=False, **kwargs):
-        self._scale = scale
-        self._fractional_scale = fractional_scale
-        super(StaticScaleMixin, self).__init__(*args, **kwargs)
-
-    def scales(self):
-        return (self._scale *
-                self.num_rows() if self._fractional_scale else self._scale)
-
-
-class RmBevL1VariableOptimizer(StaticScaleMixin,
+class RmBevL1VariableOptimizer(optimizers.StaticScaleMixin,
                                optimizers.RegretBasedVariableOptimizer):
     def __init__(self,
                  *args,
@@ -366,17 +355,17 @@ class RmSimMixin(RmMixin):
         return True
 
 
-class RmL1VariableOptimizer(RmMixin, StaticScaleMixin,
+class RmL1VariableOptimizer(RmMixin, optimizers.StaticScaleMixin,
                             optimizers.GradEvBasedVariableOptimizer):
     pass
 
 
-class RmSimVariableOptimizer(RmSimMixin, StaticScaleMixin,
+class RmSimVariableOptimizer(RmSimMixin, optimizers.StaticScaleMixin,
                              optimizers.GradEvBasedVariableOptimizer):
     pass
 
 
-class RmInfVariableOptimizer(RmMixin, StaticScaleMixin,
+class RmInfVariableOptimizer(RmMixin, optimizers.StaticScaleMixin,
                              optimizers.GradEvBasedVariableOptimizer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, independent_dimensions=True, **kwargs)
@@ -396,21 +385,21 @@ class RmNnVariableOptimizer(RmInfVariableOptimizer):
 
 class RmL1AmrrVariableOptimizer(_AvgMaxRegretRegularization,
                                 _RmExtraRegularization, RmMixin,
-                                StaticScaleMixin,
+                                optimizers.StaticScaleMixin,
                                 optimizers.GradEvBasedVariableOptimizer):
     pass
 
 
 class RmSimAmrrVariableOptimizer(_AvgMaxRegretRegularization,
                                  _RmExtraRegularization, RmSimMixin,
-                                 StaticScaleMixin,
+                                 optimizers.StaticScaleMixin,
                                  optimizers.GradEvBasedVariableOptimizer):
     pass
 
 
 class RmInfAmrrVariableOptimizer(_AvgMaxRegretRegularization,
                                  _RmExtraRegularization, RmMixin,
-                                 StaticScaleMixin,
+                                 optimizers.StaticScaleMixin,
                                  optimizers.GradEvBasedVariableOptimizer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, independent_dimensions=True, **kwargs)
@@ -423,21 +412,21 @@ class RmNnAmrrVariableOptimizer(_AvgMaxRegretRegularization,
 
 class RmL1AmarrVariableOptimizer(_AvgMaxAbsRegretRegularization,
                                  _RmExtraRegularization, RmMixin,
-                                 StaticScaleMixin,
+                                 optimizers.StaticScaleMixin,
                                  optimizers.GradEvBasedVariableOptimizer):
     pass
 
 
 class RmSimAmarrVariableOptimizer(_AvgMaxAbsRegretRegularization,
                                   _RmExtraRegularization, RmSimMixin,
-                                  StaticScaleMixin,
+                                  optimizers.StaticScaleMixin,
                                   optimizers.GradEvBasedVariableOptimizer):
     pass
 
 
 class RmInfAmarrVariableOptimizer(_AvgMaxAbsRegretRegularization,
                                   _RmExtraRegularization, RmMixin,
-                                  StaticScaleMixin,
+                                  optimizers.StaticScaleMixin,
                                   optimizers.GradEvBasedVariableOptimizer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, independent_dimensions=True, **kwargs)
@@ -451,21 +440,21 @@ class RmNnAmarrVariableOptimizer(_AvgMaxAbsRegretRegularization,
 
 class RmL1ArrVariableOptimizer(_AvgRegretRegularization,
                                _RmExtraRegularization, RmMixin,
-                               StaticScaleMixin,
+                               optimizers.StaticScaleMixin,
                                optimizers.GradEvBasedVariableOptimizer):
     pass
 
 
 class RmSimArrVariableOptimizer(_AvgRegretRegularization,
                                 _RmExtraRegularization, RmSimMixin,
-                                StaticScaleMixin,
+                                optimizers.StaticScaleMixin,
                                 optimizers.GradEvBasedVariableOptimizer):
     pass
 
 
 class RmInfArrVariableOptimizer(_AvgRegretRegularization,
                                 _RmExtraRegularization, RmMixin,
-                                StaticScaleMixin,
+                                optimizers.StaticScaleMixin,
                                 optimizers.GradEvBasedVariableOptimizer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, independent_dimensions=True, **kwargs)
