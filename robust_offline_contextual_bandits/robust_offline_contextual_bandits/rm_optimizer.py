@@ -5,10 +5,6 @@ from tensorflow.python.training import optimizer
 from tensorflow.python.ops.resource_variable_ops import ResourceVariable
 
 
-def plus(t):
-    return tf.maximum(t, 0.0)
-
-
 def sum_over_dims(t):
     return tf.reduce_sum(t, axis=0, keep_dims=True)
 
@@ -45,8 +41,8 @@ def rm(utility,
        regularization_bonus=None):
     allow_negative = not non_negative
 
-    p = plus(utility - ev)
-    if allow_negative: d = plus(-utility - ev)
+    p = tf.nn.relu(utility - ev)
+    if allow_negative: d = tf.nn.relu(-utility - ev)
 
     z = sum_over_dims(p)
     if allow_negative: z += sum_over_dims(d)
@@ -54,9 +50,9 @@ def rm(utility,
         z = z + regularization_bonus
 
     if relax_simplex_constraint:
-        ev = plus(ev)
-        p = plus(utility - ev)
-        if allow_negative: d = plus(-utility - ev)
+        ev = tf.nn.relu(ev)
+        p = tf.nn.relu(utility - ev)
+        if allow_negative: d = tf.nn.relu(-utility - ev)
 
     delta = p
     if allow_negative: delta -= d
@@ -393,9 +389,9 @@ class RmBevL1VariableOptimizer(StaticScaleMixin, RegretBasedVariableOptimizer):
                          next_regret_down,
                          scale=1.0,
                          regularization_bonus=None):
-        p = plus(next_regret_up)
+        p = tf.nn.relu(next_regret_up)
         allow_negative = not self.non_negative
-        if allow_negative: d = plus(next_regret_down)
+        if allow_negative: d = tf.nn.relu(next_regret_down)
 
         z = sum_over_dims(p)
         if allow_negative: z += sum_over_dims(d)
@@ -610,7 +606,7 @@ class _AvgMaxRegretRegularization(object):
         avg_max_pos_regret = self.get_slot('avg_max_pos_regret')
         max_iregret = avg_max_pos_regret
         for r in iregret:
-            max_iregret = tf.maximum(max_iregret, plus(r))
+            max_iregret = tf.maximum(max_iregret, tf.nn.relu(r))
         return avg_max_pos_regret.assign_add(
             (max_iregret - avg_max_pos_regret) / t,
             use_locking=self._use_locking)
@@ -646,9 +642,9 @@ class _AvgRegretRegularization(object):
 
     def updated_regularization_bonus(self, *iregret, t=1):
         avg_pos_regret = self.get_slot('avg_pos_regret')
-        max_iregret = plus(iregret[0])
+        max_iregret = tf.nn.relu(iregret[0])
         for i in range(1, len(iregret)):
-            max_iregret = tf.maximum(max_iregret, plus(iregret[i]))
+            max_iregret = tf.maximum(max_iregret, tf.nn.relu(iregret[i]))
         return avg_pos_regret.assign_add(
             (max_iregret - avg_pos_regret) / t, use_locking=self._use_locking)
 
