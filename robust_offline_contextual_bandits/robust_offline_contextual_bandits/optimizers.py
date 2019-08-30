@@ -1,4 +1,6 @@
+from inspect import signature
 import tensorflow as tf
+from tensorflow.python.training import optimizer
 from tensorflow.python.ops.resource_variable_ops import ResourceVariable
 import numpy as np
 
@@ -375,3 +377,59 @@ class MaxRegretRegularizedSdaNnVariableOptimizer(
 
     def scales(self):
         return super().scales() / 2.0
+
+
+class CompositeOptimizer(optimizer.Optimizer):
+    @classmethod
+    def combine(cls, *new_variable_optimizer, **kwargs):
+        return cls(lambda var, i: new_variable_optimizer[i](var), **kwargs)
+
+    def __init__(self,
+                 new_variable_optimizer,
+                 use_locking=False,
+                 name=None,
+                 var_list=[]):
+        super(CompositeOptimizer,
+              self).__init__(use_locking,
+                             type(self).__name__ if name is None else name)
+        self._new_opt = new_variable_optimizer
+        self._optimizers = None
+        self.initializer = None
+        with tf.variable_scope(self._name, reuse=True):
+            self._num_updates = ResourceVariable(0, name='num_updates')
+        if len(var_list) > 0:
+            self._create_slots(var_list)
+
+    def variables(self):
+        return sum([list(opt.variables()) for opt in self._optimizers],
+                   [self._num_updates])
+
+    def _create_slots(self, var_list):
+        if self._optimizers is None:
+            self._optimizers = []
+            initializers = [self._num_updates.initializer]
+            pass_i = (len(
+                signature(self._new_opt, follow_wrapped=False).parameters) > 1)
+            with tf.variable_scope(self._name):
+                for i in range(len(var_list)):
+                    var = var_list[i]
+                    self._optimizers.append((self._new_opt(var, i) if pass_i
+                                             else self._new_opt(var)))
+                    initializers.append(self._optimizers[-1].initializer)
+                self.initializer = tf.group(*initializers)
+        return self.initializer
+
+    def apply_gradients(self, grads_and_vars, global_step=None, name=None):
+        grads, var_list = zip(*grads_and_vars)
+        if self._optimizers is None: self._create_slots(var_list)
+        updates = []
+        for i in range(len(grads)):
+            updates.append(self._apply_gradients(self._optimizers[i],
+                                                 grads[i]))
+        updates.append(
+            self._num_updates.assign_add(1, use_locking=self._use_locking))
+        return tf.group(*updates)
+
+    def _apply_gradients(self, optimizer, grad):
+        with tf.variable_scope(self._name, reuse=True):
+            return optimizer.dense_update(grad, self._num_updates)
