@@ -318,8 +318,8 @@ class StaticScaleMixin(object):
 class MaxRegretRegularizedSdaMixin(object):
     def __init__(self, *args, min_reg_param=1e-5, max_reg_param=10, **kwargs):
         super().__init__(*args, **kwargs)
-        self._min_reg_param = min_reg_param
-        self._max_reg_param = max_reg_param
+        self._min_reg_param = float(min_reg_param)
+        self._max_reg_param = float(max_reg_param)
 
     def dense_update(self, grad, num_updates=0):
         grad = self._with_fixed_dimensions(grad)
