@@ -1,8 +1,5 @@
 import tensorflow as tf
-try:
-    tf.enable_eager_execution()
-except:
-    pass
+tf.enable_eager_execution()
 from tensorflow.python.ops.resource_variable_ops import ResourceVariable
 import numpy as np
 from robust_offline_contextual_bandits.rm_optimizer import \
@@ -65,7 +62,7 @@ class RmOptimizerTest(tf.test.TestCase):
                 loss = tf.losses.mean_squared_error(y, tf.matmul(x, w))
             grad = tape.gradient(loss, [w])
             optimizer.apply_gradients(zip(grad, [w]))
-        self.assertAlmostEqual(97.47662, loss.numpy(), places=5)
+        self.assertAlmostEqual(97.47662, loss.numpy(), places=4)
 
     def test_inf_linear_single_output(self):
         num_dimensions = 2
