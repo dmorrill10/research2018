@@ -62,7 +62,7 @@ def general_normal_hedge_dt_positive_projection(regrets, c, degree=-1):
             return tf.exp(
                 (tf.square(tf.nn.relu(v)) - max_rp1_squared) / (3 * (c + 1)))
 
-    # Omit the 1/2 factor since they will be normalized anyway.
+    # Omit the 1/2 factor since it will be normalized away.
     return phi(rp1) - phi(regrets - 1.0)
 
 
