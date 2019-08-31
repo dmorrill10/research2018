@@ -346,7 +346,7 @@ class MaxRegretRegularizedSdaMixin(object):
         inverse_prox_weight = tf.minimum(self._max_reg_param,
                                          tf.maximum(self._min_reg_param, z))
 
-        final_prox_weight = tf.div_no_nan(tf.math.sqrt(t), inverse_prox_weight)
+        final_prox_weight = tf.math.div_no_nan(tf.math.sqrt(t), inverse_prox_weight)
 
         if z.shape[0].value == 1: z = tile_to_dims(z, p.shape[0].value)
 

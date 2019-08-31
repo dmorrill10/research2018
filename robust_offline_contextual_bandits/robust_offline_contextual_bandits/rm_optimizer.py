@@ -26,7 +26,7 @@ def rm(utility,
     delta = p
     if allow_negative: delta -= d
 
-    c = tf.div_no_nan(tf.cast(scale, tf.float32), z)
+    c = tf.math.div_no_nan(tf.cast(scale, tf.float32), z)
 
     if z.shape[0].value == 1: z = optimizers.tile_to_dims(z, p.shape[0].value)
     default = (
@@ -99,7 +99,7 @@ class RmBevL1VariableOptimizer(optimizers.StaticScaleMixin,
         delta = p
         if allow_negative: delta -= d
 
-        c = tf.div_no_nan(scale, z)
+        c = tf.math.div_no_nan(scale, z)
 
         if z.shape[0].value == 1:
             z = optimizers.tile_to_dims(z, p.shape[0].value)
