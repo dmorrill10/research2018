@@ -14,7 +14,7 @@ from robust_offline_contextual_bandits.rm_optimizer import \
 class RmOptimizerTest(tf.test.TestCase):
     def setUp(self):
         np.random.seed(42)
-        tf.set_random_seed(42)
+        tf.random.set_seed(42)
 
     def test_l1_mrr_linear_multiple_outputs(self):
         num_dimensions = 2

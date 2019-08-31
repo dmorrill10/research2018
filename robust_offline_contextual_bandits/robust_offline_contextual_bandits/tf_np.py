@@ -20,7 +20,7 @@ def enable_eager():
 
 
 def reset_random(seed=42):
-    tf.set_random_seed(seed)
+    tf.random.set_seed(seed)
     np.random.seed(seed)
 
 

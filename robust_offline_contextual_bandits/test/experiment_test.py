@@ -32,7 +32,7 @@ class PlateauFunctionDistribution(_PlateauFunctionDistribution):
 class RealityExperimentTest(tf.test.TestCase):
     def setUp(self):
         np.random.seed(42)
-        tf.set_random_seed(42)
+        tf.random.set_seed(42)
 
     def test_max_robust_policy(self):
         x_train = np.array([[-0.5], [0.2], [0.8]])

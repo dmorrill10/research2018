@@ -5,7 +5,7 @@ from research2018.tabular_cfr import TabularCfr, TabularCfrCurrent
 
 class TabularCfrTest(tf.test.TestCase):
     def setUp(self):
-        tf.set_random_seed(42)
+        tf.random.set_seed(42)
 
     def test_zeros(self):
         num_info_sets = 2
