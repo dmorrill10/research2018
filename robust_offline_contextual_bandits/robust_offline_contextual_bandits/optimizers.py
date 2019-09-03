@@ -80,10 +80,7 @@ class VariableOptimizer(object):
         return self.shape[1]
 
     def _get_or_make_slot(self, val, name, **kwargs):
-        with tf.variable_scope(self.name + '/' + name):
-            self._slots[name] = ResourceVariable(val,
-                                                 trainable=False,
-                                                 **kwargs)
+        self._slots[name] = ResourceVariable(val, trainable=False, **kwargs)
         return self._slots[name]
 
     def get_slot(self, name):
@@ -395,8 +392,7 @@ class CompositeOptimizer(optimizer.Optimizer):
         self._new_opt = new_variable_optimizer
         self._optimizers = None
         self.initializer = None
-        with tf.variable_scope(self._name, reuse=True):
-            self._num_updates = ResourceVariable(0, name='num_updates')
+        self._num_updates = ResourceVariable(0, name='num_updates')
         if len(var_list) > 0:
             self._create_slots(var_list)
 
@@ -410,13 +406,12 @@ class CompositeOptimizer(optimizer.Optimizer):
             initializers = [self._num_updates.initializer]
             pass_i = (len(
                 signature(self._new_opt, follow_wrapped=False).parameters) > 1)
-            with tf.variable_scope(self._name):
-                for i in range(len(var_list)):
-                    var = var_list[i]
-                    self._optimizers.append((self._new_opt(var, i) if pass_i
-                                             else self._new_opt(var)))
-                    initializers.append(self._optimizers[-1].initializer)
-                self.initializer = tf.group(*initializers)
+            for i in range(len(var_list)):
+                var = var_list[i]
+                self._optimizers.append((self._new_opt(var, i) if pass_i
+                                         else self._new_opt(var)))
+                initializers.append(self._optimizers[-1].initializer)
+            self.initializer = tf.group(*initializers)
         return self.initializer
 
     def apply_gradients(self, grads_and_vars, global_step=None, name=None):
@@ -431,5 +426,4 @@ class CompositeOptimizer(optimizer.Optimizer):
         return tf.group(*updates)
 
     def _apply_gradients(self, optimizer, grad):
-        with tf.variable_scope(self._name, reuse=True):
-            return optimizer.dense_update(grad, self._num_updates)
+        return optimizer.dense_update(grad, self._num_updates)
