@@ -51,9 +51,8 @@ def tableu20_color_table():
 
 def marker_table():
     while True:
-        for k, v in sorted(
-                mpl.markers.MarkerStyle.markers.items(),
-                key=lambda x: (str(x[0]), str(x[1]))):
+        for k, v in sorted(mpl.markers.MarkerStyle.markers.items(),
+                           key=lambda x: (str(x[0]), str(x[1]))):
             if (
                 v != "nothing"
                 and v != "pixel"
@@ -102,36 +101,37 @@ def plot_sampled_functions(data,
                            color=None):
     colors = tableu20_color_table()
     plt.plot(data.good.phi, data.good.y, '.', markersize=15, color=color)
-    plt.plot(
-        data.bad.phi, data.bad.y, '.', markersize=15, color=color, alpha=0.2)
+    plt.plot(data.bad.phi,
+             data.bad.y,
+             '.',
+             markersize=15,
+             color=color,
+             alpha=0.2)
 
     line_styles = line_style_table()
 
     legends = ['observed (noise removed)', 'unobserved', 'MAP']
 
-    plt.plot(
-        x,
-        map_model.predict(phi),
-        color=next(colors),
-        linestyle=next(line_styles),
-        linewidth=2)
+    plt.plot(x,
+             map_model.predict(phi),
+             color=next(colors),
+             linestyle=next(line_styles),
+             linewidth=2)
 
     if mle_model is not None:
-        plt.plot(
-            x,
-            mle_model.predict(phi),
-            color=next(colors),
-            linestyle=next(line_styles),
-            linewidth=2)
+        plt.plot(x,
+                 mle_model.predict(phi),
+                 color=next(colors),
+                 linestyle=next(line_styles),
+                 linewidth=2)
         legends.append('MLE')
 
     for lm in dist.sample(num_samples):
-        plt.plot(
-            x,
-            lm.predict(phi),
-            color=next(colors),
-            linestyle=next(line_styles),
-            linewidth=2)
+        plt.plot(x,
+                 lm.predict(phi),
+                 color=next(colors),
+                 linestyle=next(line_styles),
+                 linewidth=2)
 
     plt.legend(legends)
     return plt
@@ -202,8 +202,11 @@ def plot_percentile_performance(methods, baseline=None):
 
     for name, method in methods.items():
         x = method.percentile_points()
-        inv_cdf_plot.plot(
-            x, method.avg_evs(), label=name, linewidth=2, **method.style)
+        inv_cdf_plot.plot(x,
+                          method.avg_evs(),
+                          label=name,
+                          linewidth=2,
+                          **method.style)
 
         if method.num_reps() > 1:
             mean, ci = mean_and_t_ci(method.evs, axis=-1, confidence=0.95)
@@ -239,8 +242,10 @@ def plot_percentile_performance(methods, baseline=None):
 
 def plot_policies(x, policies, action_colors, num_rows=1):
     num_columns = int(np.ceil(len(policies) / num_rows))
-    fig, axes_list = plt.subplots(
-        num_rows, num_columns, sharex=True, sharey=True)
+    fig, axes_list = plt.subplots(num_rows,
+                                  num_columns,
+                                  sharex=True,
+                                  sharey=True)
     for i, policy in enumerate(policies):
         if len(policies) < 2:
             axes = axes_list
@@ -264,13 +269,18 @@ def plot_ev_curves(styles_list,
                    alpha=0.5):
     for i, styles in enumerate(styles_list):
         plt.plot(checkpoint_iterations, evs_means[i], **styles)
-        plt.fill_between(
-            checkpoint_iterations,
-            evs_means[i] - evs_ci[i],
-            evs_means[i] + evs_ci[i],
-            alpha=alpha,
-            **{i: styles[i]
-               for i in styles if i != 'label'})
+        plt.fill_between(checkpoint_iterations,
+                         evs_means[i] - evs_ci[i],
+                         evs_means[i] + evs_ci[i],
+                         alpha=alpha,
+                         **{i: styles[i]
+                            for i in styles if i != 'label'})
     plt.legend()
     plt.xlabel('iteration')
     plt.ylabel('training EV')
+
+
+def show_mnist_img(img):
+    my_plot = plt.imshow(img.squeeze() / 255)
+    plt.grid(False)
+    return my_plot
