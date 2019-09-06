@@ -76,8 +76,9 @@ class TabularCfrCurrent(object):
     def __init__(self, regrets):
         self.regrets = ResourceVariable(regrets)
         self._has_updated = False
-        self._policy = rrm.normalized(self.positive_projection(self.regrets),
-                                      axis=1)
+        self._policy = rrm.normalized_by_sum(self.positive_projection(
+            self.regrets),
+                                             axis=1)
 
     def positive_projection(self, v):
         return rm_positive_projection(v)
@@ -104,9 +105,9 @@ class TabularCfrCurrent(object):
 
     def policy(self):
         if tf.executing_eagerly() and self._has_updated:
-            self._policy = rrm.normalized(self.positive_projection(
+            self._policy = rrm.normalized_by_sum(self.positive_projection(
                 self.regrets),
-                                          axis=1)
+                                                 axis=1)
             self._has_updated = False
         return self._policy
 
@@ -232,7 +233,7 @@ class TabularCfr(object):
         return self._cur.policy
 
     def avg(self):
-        return rrm.normalized(self.policy_sum, axis=1)
+        return rrm.normalized_by_sum(self.policy_sum, axis=1)
 
     def policy(self, mix_avg=1.0):
         use_cur = mix_avg < 1

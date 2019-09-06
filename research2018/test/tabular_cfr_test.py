@@ -25,7 +25,8 @@ class TabularCfrTest(tf.test.TestCase):
         num_info_sets = 2
         num_actions = 3
         patient = TabularCfr(
-            TabularCfrCurrent(tf.random_normal([num_info_sets, num_actions])),
+            TabularCfrCurrent(
+                tf.random.normal(shape=[num_info_sets, num_actions])),
             tf.zeros([num_info_sets, num_actions]))
 
         initial_cur = tf.constant([[0.50621, 0., 0.49379],
@@ -39,7 +40,8 @@ class TabularCfrTest(tf.test.TestCase):
             patient.policy())
 
         def env(policy):
-            return tf.random_normal([num_info_sets, num_actions]) * policy
+            return tf.random.normal(
+                shape=[num_info_sets, num_actions]) * policy
 
         patient.update(env)
 
