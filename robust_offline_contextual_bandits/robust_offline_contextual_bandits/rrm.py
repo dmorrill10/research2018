@@ -2,9 +2,8 @@ import tensorflow as tf
 from tensorflow.python.ops.resource_variable_ops import ResourceVariable
 from tf_kofn_robust_policy_optimization.robust.contextual_kofn import \
     ContextualKofnGame
-from research2018 import rrm
-from tf_contextual_prediction_with_expert_advice.rrm import \
-    rrm_loss
+import tf_contextual_prediction_with_expert_advice as cpea
+from tf_contextual_prediction_with_expert_advice.rrm import rrm_loss
 
 
 class RewardAugmentedMl(object):
@@ -45,8 +44,8 @@ class InstRegretStratMatching(object):
 
     def loss(self, predictions, policy, cfv):
         r = tf.stop_gradient(
-            rrm.rm_policy(cfv -
-                          tf.reduce_sum(cfv * policy, axis=1, keepdims=True)))
+            cpea.rm_policy(cfv -
+                           tf.reduce_sum(cfv * policy, axis=1, keepdims=True)))
         log_policy = tf.log(tf.clip_by_value(policy, 1e-15, 1 - 1e-15))
         return -tf.reduce_mean(tf.reduce_sum(r * log_policy, axis=1))
 
@@ -54,12 +53,12 @@ class InstRegretStratMatching(object):
 class InstRegretStratAvg(object):
     '''Bad and doesn't make much sense.'''
     def policy_activation(self, pre_activations):
-        return rrm.rm_policy(pre_activations)
+        return cpea.rm_policy(pre_activations)
 
     def loss(self, predictions, policy, cfv):
         r = tf.stop_gradient(
-            rrm.rm_policy(cfv -
-                          tf.reduce_sum(cfv * policy, axis=1, keepdims=True)))
+            cpea.rm_policy(cfv -
+                           tf.reduce_sum(cfv * policy, axis=1, keepdims=True)))
         error = tf.square(r - predictions) / 2.0
         return tf.reduce_mean(tf.reduce_sum(error, axis=1))
 
@@ -76,7 +75,7 @@ class MetaRmp(object):
         return len(self.policies)
 
     def meta_policy(self):
-        return rrm.rm_policy(self.meta_qregrets)
+        return cpea.rm_policy(self.meta_qregrets)
 
     def policy_activation(self, predictions):
         policies = tf.stack([policy(predictions) for policy in self.policies],
@@ -136,7 +135,7 @@ class Rrm(MetaRmp):
             def g(x):
                 return tf.nn.softmax(x / self._adjusted_temperature(temp))
 
-        policies = ([rrm.rm_policy] + list(map(f, softmax_temperatures)))
+        policies = ([cpea.rm_policy] + list(map(f, softmax_temperatures)))
         super(Rrm, self).__init__(policies, *args, **kwargs)
         self.ignore_negative_regrets = ignore_negative_regrets
 
@@ -167,7 +166,7 @@ class SplitRrm(MetaRmp):
                 return tf.nn.softmax(z[:, :-1] /
                                      self._adjusted_temperature(temp))
 
-        policies = ([lambda z: rrm.rm_policy(z[:, :-1] - z[:, -1:])] +
+        policies = ([lambda z: cpea.rm_policy(z[:, :-1] - z[:, -1:])] +
                     list(map(f), softmax_temperatures))
         super(SplitRrm, self).__init__(policies, *args, **kwargs)
 
@@ -179,7 +178,7 @@ class SplitRrm(MetaRmp):
         q, v = predictions[:, :-1], predictions[:, -1:]
         r = q - v
 
-        pi_rm = rrm.rm_policy(r)
+        pi_rm = cpea.rm_policy(r)
 
         q_diffs = tf.square(q - cfv)
         q_loss = tf.reduce_mean(tf.reduce_sum(q_diffs, axis=1)) / 2.0
@@ -194,8 +193,8 @@ class SplitRrm(MetaRmp):
 class Rrmp(Rrm):
     '''With a tabular representation, this reduces to RM+.'''
     def loss(self, predictions, policy, cfv):
-        pi = rrm.rm_policy(predictions)
-        inst_r = cfv - rrm.utility(pi, cfv)
+        pi = cpea.rm_policy(predictions)
+        inst_r = cfv - cpea.utility(pi, cfv)
         inst_q = tf.stop_gradient(tf.maximum(inst_r, -tf.nn.relu(predictions)))
         return tf.reduce_mean(
             tf.reduce_sum(tf.square(predictions - inst_q), axis=1)) / 2.0

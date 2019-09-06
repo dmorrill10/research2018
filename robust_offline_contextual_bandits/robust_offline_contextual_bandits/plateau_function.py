@@ -3,7 +3,7 @@ import numpy as np
 import os
 from glob import glob
 from tf_supervised_inference.data import Data, NamedDataSets
-from research2018 import rrm
+import tf_contextual_prediction_with_expert_advice as cpea
 
 from robust_offline_contextual_bandits.data import DataComponentsForTraining
 
@@ -19,8 +19,8 @@ def slope_and_bias_across_constants_for_unknown_outputs(
         f(x, outside_plateaus=lambda x: np.full([len(x)], float(i)))
         for f in plateau_functions
     ] for i in range(2)])
-    bias = tf.reduce_mean(rrm.utility(policy, test_rewards[0].T))
-    slope = tf.reduce_mean(rrm.utility(policy, test_rewards[1].T)) - bias
+    bias = tf.reduce_mean(cpea.utility(policy, test_rewards[0].T))
+    slope = tf.reduce_mean(cpea.utility(policy, test_rewards[1].T)) - bias
     return slope, bias
 
 

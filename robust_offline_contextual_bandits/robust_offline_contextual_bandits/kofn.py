@@ -1,7 +1,8 @@
 import tensorflow as tf
 import numpy as np
 
-from research2018 import rrm
+import tf_contextual_prediction_with_expert_advice as cpea
+from tf_contextual_prediction_with_expert_advice import rrm
 
 from robust_offline_contextual_bandits.policy import \
     sorted_values_across_worlds
@@ -207,7 +208,7 @@ class KofnTraining(object):
         ]
 
     def utility(self, learner, rewards):
-        return rrm.utility(learner.policy(self.next_input()), rewards)
+        return cpea.utility(learner.policy(self.next_input()), rewards)
 
     def value_slopes_and_biases(self, arms_with_contexts):
         test_rewards = [
@@ -286,7 +287,7 @@ class KofnTrainingResults(object):
         return cls(competitor.rep, competitor.policy_model, training_data)
 
     @classmethod
-    def load(cls, name, policy_model):
+    def load(cls, name, policy_model=rrm.RrmPolicyModel):
         return cls(RepresentationWithFixedInputs.load('{}.rep'.format(name)),
                    policy_model.load('{}.policy_model'.format(name)),
                    KofnTrainingData.load('{}.training_data'.format(name)))

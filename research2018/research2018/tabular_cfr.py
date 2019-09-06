@@ -1,7 +1,8 @@
 import tensorflow as tf
 import numpy as np
 from tensorflow.python.ops.resource_variable_ops import ResourceVariable
-from research2018 import rrm
+import tf_contextual_prediction_with_expert_advice as cpea
+from tf_contextual_prediction_with_expert_advice import rrm
 
 
 def linear_avg_next_policy_sum(policy_sum, _cur, t):
@@ -76,9 +77,8 @@ class TabularCfrCurrent(object):
     def __init__(self, regrets):
         self.regrets = ResourceVariable(regrets)
         self._has_updated = False
-        self._policy = rrm.normalized_by_sum(self.positive_projection(
-            self.regrets),
-                                             axis=1)
+        self._policy = cpea.normalized(self.positive_projection(self.regrets),
+                                       axis=1)
 
     def positive_projection(self, v):
         return rm_positive_projection(v)
@@ -105,9 +105,9 @@ class TabularCfrCurrent(object):
 
     def policy(self):
         if tf.executing_eagerly() and self._has_updated:
-            self._policy = rrm.normalized_by_sum(self.positive_projection(
+            self._policy = cpea.normalized(self.positive_projection(
                 self.regrets),
-                                                 axis=1)
+                                           axis=1)
             self._has_updated = False
         return self._policy
 
@@ -115,7 +115,7 @@ class TabularCfrCurrent(object):
         return self.update_with_cfv(env(self.policy()), **kwargs)
 
     def update_with_cfv(self, cfv, rm_plus=False):
-        evs = rrm.utility(self.policy(), cfv)
+        evs = cpea.utility(self.policy(), cfv)
         regrets = cfv - evs
 
         r = self.regrets + regrets
@@ -163,7 +163,7 @@ class TabularAdaNormalHedgeCurrent(TabularCfrCurrent):
                                                            degree=self._degree)
 
     def update_with_cfv(self, cfv, rm_plus=False):
-        evs = rrm.utility(self.policy(), cfv)
+        evs = cpea.utility(self.policy(), cfv)
         regrets = cfv - evs
 
         r = self.regrets + regrets
@@ -233,7 +233,7 @@ class TabularCfr(object):
         return self._cur.policy
 
     def avg(self):
-        return rrm.normalized_by_sum(self.policy_sum, axis=1)
+        return cpea.normalized(self.policy_sum, axis=1)
 
     def policy(self, mix_avg=1.0):
         use_cur = mix_avg < 1

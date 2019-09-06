@@ -1,3 +1,4 @@
+from tf_contextual_prediction_with_expert_advice import rrm
 from robust_offline_contextual_bandits.representations import \
     RepresentationWithFixedInputs
 from robust_offline_contextual_bandits.policy import new_ff_policy_model
@@ -6,8 +7,11 @@ from robust_offline_contextual_bandits.optimizers import new_t_inv_gd_optimizer
 
 class Competitor(object):
     @classmethod
-    def from_network_factory(cls, rep, network_factory, optimizer,
-                             policy_model_factory):
+    def from_network_factory(cls,
+                             rep,
+                             network_factory,
+                             optimizer,
+                             policy_model_factory=rrm.RrmPolicyModel):
         policy_model = policy_model_factory(network_factory(
             rep.num_features()))
         return cls(rep, policy_model, optimizer)
@@ -21,8 +25,12 @@ class Competitor(object):
             **kwargs)
 
     @classmethod
-    def tile_coding(cls, x, num_actions, num_tiling_pairs,
-                    policy_model_factory, **kwargs):
+    def tile_coding(cls,
+                    x,
+                    num_actions,
+                    num_tiling_pairs,
+                    policy_model_factory=rrm.RrmPolicyModel,
+                    **kwargs):
         rep = RepresentationWithFixedInputs.dense_tile_coding(
             x, num_tiling_pairs, **kwargs)
         optimizer = new_t_inv_gd_optimizer(rep.learning_rate())

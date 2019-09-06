@@ -1,22 +1,5 @@
 import tensorflow as tf
-from tensorflow.python.eager import context
 import numpy as np
-
-
-def enable_eager():
-    try:
-        if context._default_mode != context.EAGER_MODE:
-            context._context = None
-            try:
-                tf.compat.v1.enable_eager_execution()
-            except:
-                pass
-    except:
-        try:
-            tf.compat.v1.enable_eager_execution()
-        except:
-            pass
-    assert tf.executing_eagerly()
 
 
 def reset_random(seed=42):

@@ -6,7 +6,7 @@ from robust_offline_contextual_bandits.tf_np import reset_random
 from robust_offline_contextual_bandits.plotting import tableu20_color_table
 from robust_offline_contextual_bandits.policy import max_robust_policy
 from robust_offline_contextual_bandits.plateau_function import PlateauFunction
-from research2018 import rrm
+import tf_contextual_prediction_with_expert_advice as cpea
 
 
 @load_list
@@ -74,7 +74,7 @@ class RealityExperiment(object):
                                  [r(x) for r in self.reward_functions()])
 
     def map_policy(self, x):
-        return rrm.greedy_policy(self.avg_rewards(x).astype('float32'))
+        return cpea.greedy_policy(self.avg_rewards(x).astype('float32'))
 
     def reward_sampler(self, x):
         rfds = self.reward_function_distributions(x)

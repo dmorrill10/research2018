@@ -1,6 +1,6 @@
 import numpy as np
 import tensorflow as tf
-from research2018 import rrm
+import tf_contextual_prediction_with_expert_advice as cpea
 from robust_offline_contextual_bandits.tf_np import logical_or
 
 
@@ -105,7 +105,7 @@ def max_robust_policy(inputs_known_on_each_action, rewards_on_known_inputs):
             all_rewards[known_inputs, a] = np.squeeze(
                 rewards_on_known_inputs[a])
 
-    policy = rrm.greedy_policy(all_rewards.astype('float32'))
+    policy = cpea.greedy_policy(all_rewards.astype('float32'))
 
     rows_to_play_random = np.logical_not(
         logical_or(*inputs_known_on_each_action))
