@@ -198,7 +198,7 @@ class TabularRoad(object):
             critical_error_reward = critical_reward_for_fixed_ditch_bonus(
                 progress_bonus, speed_limit, discount)
 
-        tf.logging.info('progress_bonus: {}, wc_ncer: {}, cer: {}'.format(
+        tf.compat.v1.logging.info('progress_bonus: {}, wc_ncer: {}, cer: {}'.format(
             progress_bonus, wc_ncer, critical_error_reward))
 
         reward_datasets = []

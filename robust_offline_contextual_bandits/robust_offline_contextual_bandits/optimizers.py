@@ -6,17 +6,17 @@ import numpy as np
 
 
 def new_t_inv_gd_optimizer(learning_rate):
-    return tf.train.GradientDescentOptimizer(
-        learning_rate=tf.train.inverse_time_decay(
-            learning_rate, tf.train.get_global_step(), 1, 1))
+    return tf.compat.v1.train.GradientDescentOptimizer(
+        learning_rate=tf.compat.v1.train.inverse_time_decay(
+            learning_rate, tf.compat.v1.train.get_global_step(), 1, 1))
 
 
 def sum_over_dims(t):
-    return tf.reduce_sum(t, axis=0, keep_dims=True)
+    return tf.reduce_sum(t, axis=0, keepdims=True)
 
 
 def max_over_dims(t):
-    return tf.reduce_max(t, axis=0, keep_dims=True)
+    return tf.reduce_max(t, axis=0, keepdims=True)
 
 
 def tile_to_dims(t, num_dims):
@@ -54,7 +54,7 @@ class VariableOptimizer(object):
         self._var = var
         self._independent_dimensions = independent_dimensions
         self._dependent_columns = dependent_columns
-        self.shape = tuple(v.value for v in self._matrix_var.shape)
+        self.shape = self._matrix_var.shape
         self._use_locking = use_locking
         self.name = type(self).__name__ if name is None else name
         self._slots = {}
@@ -93,7 +93,7 @@ class VariableOptimizer(object):
         return self.dense_update(grad, num_updates)
 
     def instantaneous_ev(self, utility, scale=1.0, descale=True):
-        iev = tf.reduce_sum(self._matrix_var * utility, axis=0, keep_dims=True)
+        iev = tf.reduce_sum(self._matrix_var * utility, axis=0, keepdims=True)
         if descale: iev = iev / scale
         return iev
 
@@ -343,8 +343,8 @@ class MaxRegretRegularizedSdaMixin(object):
         inverse_prox_weight = tf.minimum(self._max_reg_param,
                                          tf.maximum(self._min_reg_param, z))
 
-        final_prox_weight = tf.math.div_no_nan(tf.math.sqrt(t),
-                                               inverse_prox_weight)
+        final_prox_weight = tf.math.divide_no_nan(tf.math.sqrt(t),
+                                                  inverse_prox_weight)
 
         if z.shape[0] == 1: z = tile_to_dims(z, p.shape[0])
 

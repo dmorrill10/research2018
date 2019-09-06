@@ -1,5 +1,5 @@
 import tensorflow as tf
-tf.enable_eager_execution()
+tf.compat.v1.enable_eager_execution()
 from research2018.tabular_cfr import TabularCfr, TabularCfrCurrent
 
 

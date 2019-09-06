@@ -93,9 +93,9 @@ def load_or_save(load, save):
         def g(*args, **kwargs):
             try:
                 payload = load()
-                tf.logging.info('Loaded data...')
+                tf.compat.v1.logging.info('Loaded data...')
             except:
-                tf.logging.info('Computing and saving data...')
+                tf.compat.v1.logging.info('Computing and saving data...')
                 payload = compute(*args, **kwargs)
                 save(payload)
             return payload

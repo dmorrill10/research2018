@@ -194,7 +194,7 @@ class Experiment(object):
 
         self.new_reality_experiment = new_reality_experiment
         self.sample_num_actions = sample_num_actions
-        tf.train.get_or_create_global_step().assign(0)
+        tf.compat.v1.train.get_or_create_global_step().assign(0)
         self.x_train = x_train
         self.x_train.setflags(write=False)
 

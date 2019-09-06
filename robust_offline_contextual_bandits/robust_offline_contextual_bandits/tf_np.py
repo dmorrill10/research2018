@@ -8,12 +8,12 @@ def enable_eager():
         if context._default_mode != context.EAGER_MODE:
             context._context = None
             try:
-                tf.enable_eager_execution()
+                tf.compat.v1.enable_eager_execution()
             except:
                 pass
     except:
         try:
-            tf.enable_eager_execution()
+            tf.compat.v1.enable_eager_execution()
         except:
             pass
     assert tf.executing_eagerly()

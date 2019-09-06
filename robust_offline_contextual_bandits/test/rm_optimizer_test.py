@@ -1,5 +1,5 @@
 import tensorflow as tf
-tf.enable_eager_execution()
+tf.compat.v1.enable_eager_execution()
 from tensorflow.python.ops.resource_variable_ops import ResourceVariable
 import numpy as np
 from robust_offline_contextual_bandits.optimizers import CompositeOptimizer
@@ -21,27 +21,26 @@ class RmOptimizerTest(tf.test.TestCase):
         num_players = 5
         num_examples = 10
 
-        x = np.concatenate(
-            [
-                np.random.normal(size=[num_examples, num_dimensions - 1]),
-                np.ones([num_examples, 1])
-            ],
-            axis=1).astype('float32')
+        x = np.concatenate([
+            np.random.normal(size=[num_examples, num_dimensions - 1]),
+            np.ones([num_examples, 1])
+        ],
+                           axis=1).astype('float32')
         y = np.random.normal(
             size=[num_examples, num_players]).astype('float32')
 
         w = ResourceVariable(tf.zeros([num_dimensions, num_players]))
 
-        loss = tf.losses.mean_squared_error(y, tf.matmul(x, w))
+        loss = tf.reduce_mean(tf.keras.losses.mse(y, tf.matmul(x, w)))
         optimizer = CompositeOptimizer(
             lambda var: RmL1AmrrVariableOptimizer(var, scale=1000.0),
             var_list=[w])
 
         self.assertEqual(0.0, tf.reduce_sum(tf.abs(w)).numpy())
-        self.assertAlmostEqual(0.86844116, loss.numpy(), places=7)
+        self.assertAlmostEqual(0.86844116, loss.numpy(), places=6)
         for t in range(10):
             with tf.GradientTape() as tape:
-                loss = tf.losses.mean_squared_error(y, tf.matmul(x, w))
+                loss = tf.reduce_mean(tf.keras.losses.mse(y, tf.matmul(x, w)))
             grad = tape.gradient(loss, [w])
             optimizer.apply_gradients(zip(grad, [w]))
             if t > 1:
@@ -51,36 +50,35 @@ class RmOptimizerTest(tf.test.TestCase):
         # Compare this to RmL1VariableOptimizer:
         w = ResourceVariable(tf.zeros([num_dimensions, num_players]))
 
-        loss = tf.losses.mean_squared_error(y, tf.matmul(x, w))
+        loss = tf.reduce_mean(tf.keras.losses.mse(y, tf.matmul(x, w)))
         optimizer = CompositeOptimizer(
             lambda var: RmL1VariableOptimizer(var, scale=1000.0), var_list=[w])
 
         self.assertEqual(0.0, tf.reduce_sum(tf.abs(w)).numpy())
-        self.assertAlmostEqual(0.86844116, loss.numpy(), places=7)
+        self.assertAlmostEqual(0.86844116, loss.numpy(), places=6)
         for t in range(10):
             with tf.GradientTape() as tape:
-                loss = tf.losses.mean_squared_error(y, tf.matmul(x, w))
+                loss = tf.reduce_mean(tf.keras.losses.mse(y, tf.matmul(x, w)))
             grad = tape.gradient(loss, [w])
             optimizer.apply_gradients(zip(grad, [w]))
-        self.assertAlmostEqual(97.47662, loss.numpy(), places=4)
+        self.assertAlmostEqual(97.47674, loss.numpy(), places=4)
 
     def test_inf_linear_single_output(self):
         num_dimensions = 2
         num_players = 1
         num_examples = 10
 
-        x = np.concatenate(
-            [
-                np.random.normal(size=[num_examples, num_dimensions - 1]),
-                np.ones([num_examples, 1])
-            ],
-            axis=1).astype('float32')
+        x = np.concatenate([
+            np.random.normal(size=[num_examples, num_dimensions - 1]),
+            np.ones([num_examples, 1])
+        ],
+                           axis=1).astype('float32')
         y = np.random.normal(
             size=[num_examples, num_players]).astype('float32')
 
         w = ResourceVariable(tf.zeros([num_dimensions, num_players]))
 
-        loss = tf.losses.mean_squared_error(y, tf.matmul(x, w))
+        loss = tf.reduce_mean(tf.keras.losses.mse(y, tf.matmul(x, w)))
         optimizer = CompositeOptimizer(
             lambda var: RmInfVariableOptimizer(var, scale=0.8))
 
@@ -88,7 +86,7 @@ class RmOptimizerTest(tf.test.TestCase):
         self.assertAlmostEqual(1.1386044, loss.numpy(), places=7)
         for t in range(50):
             with tf.GradientTape() as tape:
-                loss = tf.losses.mean_squared_error(y, tf.matmul(x, w))
+                loss = tf.reduce_mean(tf.keras.losses.mse(y, tf.matmul(x, w)))
             grad = tape.gradient(loss, [w])
             optimizer.apply_gradients(zip(grad, [w]))
             if t > 1:
@@ -104,36 +102,36 @@ class RmOptimizerTest(tf.test.TestCase):
 
         y = 0.1
 
-        loss = tf.losses.mean_squared_error(tf.fill(w.shape, y), w)
+        loss = tf.reduce_mean(tf.keras.losses.mse(tf.fill(w.shape, y), w))
         optimizer = CompositeOptimizer(
             lambda var: RmNnVariableOptimizer(var, scale=1.0))
 
         self.assertAlmostEqual(y * y, loss.numpy())
         for i in range(20):
             with tf.GradientTape() as tape:
-                loss = tf.losses.mean_squared_error(tf.fill(w.shape, y), w)
+                loss = tf.reduce_mean(
+                    tf.keras.losses.mse(tf.fill(w.shape, y), w))
             grad = tape.gradient(loss, [w])
             optimizer.apply_gradients(zip(grad, [w]))
-        loss = tf.losses.mean_squared_error(tf.fill(w.shape, y), w)
-        self.assertAlmostEquals(0.0, loss.numpy())
+        loss = tf.reduce_mean(tf.keras.losses.mse(tf.fill(w.shape, y), w))
+        self.assertAlmostEqual(0.0, loss.numpy())
 
     def test_sim_linear_single_output(self):
         num_dimensions = 2
         num_players = 1
         num_examples = 10
 
-        x = np.concatenate(
-            [
-                np.random.uniform(size=[num_examples, num_dimensions - 1]),
-                np.ones([num_examples, 1])
-            ],
-            axis=1).astype('float32')
+        x = np.concatenate([
+            np.random.uniform(size=[num_examples, num_dimensions - 1]),
+            np.ones([num_examples, 1])
+        ],
+                           axis=1).astype('float32')
         y = np.random.uniform(
             size=[num_examples, num_players]).astype('float32')
 
         w = ResourceVariable(tf.zeros([num_dimensions, num_players]))
 
-        loss = tf.losses.mean_squared_error(y, tf.matmul(x, w))
+        loss = tf.reduce_mean(tf.keras.losses.mse(y, tf.matmul(x, w)))
         optimizer = CompositeOptimizer(
             lambda var: RmSimVariableOptimizer(var, scale=1))
 
@@ -141,7 +139,7 @@ class RmOptimizerTest(tf.test.TestCase):
         self.assertAlmostEqual(0.23852186, loss.numpy(), places=7)
         for t in range(10):
             with tf.GradientTape() as tape:
-                loss = tf.losses.mean_squared_error(y, tf.matmul(x, w))
+                loss = tf.reduce_mean(tf.keras.losses.mse(y, tf.matmul(x, w)))
             grad = tape.gradient(loss, [w])
             optimizer.apply_gradients(zip(grad, [w]))
             if t > 1:
@@ -172,18 +170,17 @@ class RmOptimizerTest(tf.test.TestCase):
         num_players = 1
         num_examples = 10
 
-        x = np.concatenate(
-            [
-                np.random.normal(size=[num_examples, num_dimensions - 1]),
-                np.ones([num_examples, 1])
-            ],
-            axis=1).astype('float32')
+        x = np.concatenate([
+            np.random.normal(size=[num_examples, num_dimensions - 1]),
+            np.ones([num_examples, 1])
+        ],
+                           axis=1).astype('float32')
         y = np.random.normal(
             size=[num_examples, num_players]).astype('float32')
 
         w = ResourceVariable(tf.zeros([num_dimensions, num_players]))
 
-        loss = tf.losses.mean_squared_error(y, tf.matmul(x, w))
+        loss = tf.reduce_mean(tf.keras.losses.mse(y, tf.matmul(x, w)))
         optimizer = CompositeOptimizer(
             lambda var: RmL1VariableOptimizer(var, scale=1))
 
@@ -191,7 +188,7 @@ class RmOptimizerTest(tf.test.TestCase):
         self.assertAlmostEqual(1.1386044, loss.numpy(), places=7)
         for t in range(50):
             with tf.GradientTape() as tape:
-                loss = tf.losses.mean_squared_error(y, tf.matmul(x, w))
+                loss = tf.reduce_mean(tf.keras.losses.mse(y, tf.matmul(x, w)))
             grad = tape.gradient(loss, [w])
             optimizer.apply_gradients(zip(grad, [w]))
             if t > 1:
@@ -203,26 +200,25 @@ class RmOptimizerTest(tf.test.TestCase):
         num_players = 5
         num_examples = 10
 
-        x = np.concatenate(
-            [
-                np.random.normal(size=[num_examples, num_dimensions - 1]),
-                np.ones([num_examples, 1])
-            ],
-            axis=1).astype('float32')
+        x = np.concatenate([
+            np.random.normal(size=[num_examples, num_dimensions - 1]),
+            np.ones([num_examples, 1])
+        ],
+                           axis=1).astype('float32')
         y = np.random.normal(
             size=[num_examples, num_players]).astype('float32')
 
         w = ResourceVariable(tf.zeros([num_dimensions, num_players]))
 
-        loss = tf.losses.mean_squared_error(y, tf.matmul(x, w))
+        loss = tf.reduce_mean(tf.keras.losses.mse(y, tf.matmul(x, w)))
         optimizer = CompositeOptimizer(
             lambda var: RmL1VariableOptimizer(var, scale=1.0), var_list=[w])
 
         self.assertEqual(0.0, tf.reduce_sum(tf.abs(w)).numpy())
-        self.assertAlmostEqual(0.86844116, loss.numpy(), places=7)
+        self.assertAlmostEqual(0.86844116, loss.numpy(), places=6)
         for t in range(50):
             with tf.GradientTape() as tape:
-                loss = tf.losses.mean_squared_error(y, tf.matmul(x, w))
+                loss = tf.reduce_mean(tf.keras.losses.mse(y, tf.matmul(x, w)))
             grad = tape.gradient(loss, [w])
             optimizer.apply_gradients(zip(grad, [w]))
             if t > 1:
