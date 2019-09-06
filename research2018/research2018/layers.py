@@ -218,4 +218,3 @@ class ResConvolution2D(ResMixin, tf.keras.layers.Convolution2D):
 
 
 ResConv2D = ResConvolution2D
-
