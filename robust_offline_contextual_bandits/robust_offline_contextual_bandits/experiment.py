@@ -6,16 +6,15 @@ from robust_offline_contextual_bandits.tf_np import reset_random
 from robust_offline_contextual_bandits.plotting import tableu20_color_table
 from robust_offline_contextual_bandits.policy import max_robust_policy
 from robust_offline_contextual_bandits.plateau_function import PlateauFunction
-from tf_contextual_prediction_with_expert_advice import greedy_policy
+from research2018 import rrm
 
 
 @load_list
 def load_all_plateau_functions(reality_idx):
     return list(
-        zip(*sorted(
-            PlateauFunction.load_all('plateau_function.{}.*'.format(
-                reality_idx)).items(),
-            key=lambda file: int(file.split('.')[-2]))))[1]
+        zip(*sorted(PlateauFunction.load_all('plateau_function.{}.*'.format(
+            reality_idx)).items(),
+                    key=lambda file: int(file.split('.')[-2]))))[1]
 
 
 class RealityExperiment(object):
@@ -45,8 +44,7 @@ class RealityExperiment(object):
     @cache
     def x_test_known_on_each_action(self):
         return [
-            np.full([len(self.x_test)], False)
-            for _ in range(self.num_actions)
+            np.full([len(self.x_test)], False) for _ in range(self.num_actions)
         ]
 
     @cache
@@ -76,7 +74,7 @@ class RealityExperiment(object):
                                  [r(x) for r in self.reward_functions()])
 
     def map_policy(self, x):
-        return greedy_policy(self.avg_rewards(x).astype('float32'))
+        return rrm.greedy_policy(self.avg_rewards(x).astype('float32'))
 
     def reward_sampler(self, x):
         rfds = self.reward_function_distributions(x)
@@ -103,9 +101,9 @@ class GpRealityExperimentMixin(object):
     @cache
     def gps(self):
         return [
-            self.new_gp_model(self.x_train[x_known],
-                              self.reward_functions()[a](
-                                  self.x_train[x_known])).train()
+            self.new_gp_model(
+                self.x_train[x_known],
+                self.reward_functions()[a](self.x_train[x_known])).train()
             for a, x_known in enumerate(self.x_train_known_on_each_action)
         ]
 
@@ -113,8 +111,8 @@ class GpRealityExperimentMixin(object):
         return [gp.at_inputs(x) for gp in self.gps]
 
     def avg_rewards(self, x):
-        return np.concatenate(
-            [gp.at_inputs(x).mean for gp in self.gps], axis=1)
+        return np.concatenate([gp.at_inputs(x).mean for gp in self.gps],
+                              axis=1)
 
 
 class PlateauRewardRealityExperiment(RealityExperiment):

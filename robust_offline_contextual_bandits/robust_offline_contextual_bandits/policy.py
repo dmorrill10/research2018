@@ -1,13 +1,13 @@
 import numpy as np
 import tensorflow as tf
-from tf_contextual_prediction_with_expert_advice import greedy_policy
+from research2018 import rrm
 from robust_offline_contextual_bandits.tf_np import logical_or
 
 
 def sorted_values_across_worlds(policy, sampled_rewards):
-    v = np.mean(
-        np.mean(sampled_rewards * np.expand_dims(policy, axis=-1), axis=1),
-        axis=0)
+    v = np.mean(np.mean(sampled_rewards * np.expand_dims(policy, axis=-1),
+                        axis=1),
+                axis=0)
     v.sort()
     return v
 
@@ -26,24 +26,23 @@ def new_ff_policy_model(num_actions,
             tf.keras.layers.Lambda(phi_f, output_shape=(None, num_features)))
     if num_hidden > 0:
         layers += [
-            tf.keras.layers.Dense(
-                num_units1 if i % 2 == 0 else num_units2,
-                activation=hidden_activation,
-                use_bias=True,
-                input_shape=(None, num_features)) for i in range(num_hidden)
+            tf.keras.layers.Dense(num_units1 if i % 2 == 0 else num_units2,
+                                  activation=hidden_activation,
+                                  use_bias=True,
+                                  input_shape=(None, num_features))
+            for i in range(num_hidden)
         ] + [
             tf.keras.layers.Dense(
                 num_actions, use_bias=True, activation=output_activation)
         ]
     else:
         layers += [
-            tf.keras.layers.Dense(
-                num_actions,
-                use_bias=False,
-                input_shape=(None, num_features),
-                kernel_initializer=tf.zeros_initializer(),
-                bias_initializer=tf.zeros_initializer(),
-                activation=output_activation)
+            tf.keras.layers.Dense(num_actions,
+                                  use_bias=False,
+                                  input_shape=(None, num_features),
+                                  kernel_initializer=tf.zeros_initializer(),
+                                  bias_initializer=tf.zeros_initializer(),
+                                  activation=output_activation)
         ]
     return tf.keras.Sequential(layers)
 
@@ -57,35 +56,36 @@ def new_low_rank_ff_policy_model(num_actions,
                                  hidden_activation=tf.nn.relu,
                                  output_activation=None):
     if rank >= num_units:
-        return new_ff_policy_model(
-            num_actions,
-            num_features,
-            num_units1=num_units,
-            num_units2=num_units,
-            num_hidden=num_hidden,
-            hidden_activation=hidden_activation,
-            output_activation=output_activation)
+        return new_ff_policy_model(num_actions,
+                                   num_features,
+                                   num_units1=num_units,
+                                   num_units2=num_units,
+                                   num_hidden=num_hidden,
+                                   hidden_activation=hidden_activation,
+                                   output_activation=output_activation)
     else:
         layers = []
         if initial_expansion:
             layers.append(
-                tf.keras.layers.Dense(
-                    num_units,
-                    activation=hidden_activation,
-                    use_bias=True,
-                    input_shape=(None, num_features)))
+                tf.keras.layers.Dense(num_units,
+                                      activation=hidden_activation,
+                                      use_bias=True,
+                                      input_shape=(None, num_features)))
             num_hidden -= 1
         for i in range(num_hidden):
             layers.append(
-                tf.keras.layers.Dense(
-                    rank, use_bias=True, input_shape=(None, num_features)))
+                tf.keras.layers.Dense(rank,
+                                      use_bias=True,
+                                      input_shape=(None, num_features)))
             layers.append(
-                tf.keras.layers.Dense(
-                    num_units, activation=hidden_activation, use_bias=True))
+                tf.keras.layers.Dense(num_units,
+                                      activation=hidden_activation,
+                                      use_bias=True))
 
         layers.append(
-            tf.keras.layers.Dense(
-                num_actions, use_bias=True, activation=output_activation))
+            tf.keras.layers.Dense(num_actions,
+                                  use_bias=True,
+                                  activation=output_activation))
         return tf.keras.Sequential(layers)
 
 
@@ -105,14 +105,13 @@ def max_robust_policy(inputs_known_on_each_action, rewards_on_known_inputs):
             all_rewards[known_inputs, a] = np.squeeze(
                 rewards_on_known_inputs[a])
 
-    policy = greedy_policy(all_rewards.astype('float32'))
+    policy = rrm.greedy_policy(all_rewards.astype('float32'))
 
     rows_to_play_random = np.logical_not(
         logical_or(*inputs_known_on_each_action))
     if rows_to_play_random.sum() > 0:
         return tf.where(
-            tf.tile(
-                tf.expand_dims(rows_to_play_random, axis=-1),
-                [1, policy.shape[1]]),
+            tf.tile(tf.expand_dims(rows_to_play_random, axis=-1),
+                    [1, policy.shape[1]]),
             tf.fill(policy.shape, 1.0 / policy.shape[1]), policy)
     return policy

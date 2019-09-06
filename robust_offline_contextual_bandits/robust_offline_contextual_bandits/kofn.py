@@ -1,9 +1,7 @@
 import tensorflow as tf
 import numpy as np
 
-from tf_contextual_prediction_with_expert_advice import utility
-from tf_contextual_prediction_with_expert_advice.rrm import \
-    RrmPolicyModel
+from research2018 import rrm
 
 from robust_offline_contextual_bandits.policy import \
     sorted_values_across_worlds
@@ -35,10 +33,9 @@ class KofnTrainingData(object):
 
     @classmethod
     def combine(cls, *data):
-        return cls(
-            sum([d._losses_over_time for d in data], []),
-            sum([d._evs_over_time for d in data], []),
-            data[0].checkpoint_iterations)
+        return cls(sum([d._losses_over_time for d in data], []),
+                   sum([d._evs_over_time for d in data], []),
+                   data[0].checkpoint_iterations)
 
     def __init__(self, losses_over_time, evs_over_time, checkpoint_iterations):
         assert len(losses_over_time) == len(evs_over_time)
@@ -98,7 +95,8 @@ class KofnTraining(object):
         self.trainer = trainer
         self.input_generator = input_generator
         self.num_iterations = num_iterations
-        self.num_ts_between_saving_checkpoints = num_ts_between_saving_checkpoints
+        self.num_ts_between_saving_checkpoints = (
+            num_ts_between_saving_checkpoints)
         self.num_display_checkpoints = num_display_checkpoints
 
         if reward_sampling_timer is None:
@@ -162,11 +160,10 @@ class KofnTraining(object):
         _lot = self.losses_over_time
         for i, l in enumerate(_lot):
             t = self.learners[i]
-            plt.plot(
-                self.checkpoint_iterations,
-                l,
-                alpha=0.3,
-                **policy_alg_styles[str(t)])
+            plt.plot(self.checkpoint_iterations,
+                     l,
+                     alpha=0.3,
+                     **policy_alg_styles[str(t)])
             plt.plot(
                 self.checkpoint_iterations,
                 l.cumsum() / np.arange(1, len(l) + 1),
@@ -182,22 +179,20 @@ class KofnTraining(object):
             t = self.learners[i]
 
             if with_avg:
-                plt.plot(
-                    self.checkpoint_iterations,
-                    l,
-                    alpha=0.2,
-                    **policy_alg_styles[str(t)])
+                plt.plot(self.checkpoint_iterations,
+                         l,
+                         alpha=0.2,
+                         **policy_alg_styles[str(t)])
                 plt.plot(
                     self.checkpoint_iterations,
                     l.cumsum() / np.arange(1, len(l) + 1),
                     label=str(t),
                     **policy_alg_styles[str(t)])  # yapf:disable
             else:
-                plt.plot(
-                    self.checkpoint_iterations,
-                    l,
-                    label=str(t),
-                    **policy_alg_styles[str(t)])
+                plt.plot(self.checkpoint_iterations,
+                         l,
+                         label=str(t),
+                         **policy_alg_styles[str(t)])
         plt.legend()
         plt.xlabel('iteration')
         plt.ylabel('training EV')
@@ -207,18 +202,17 @@ class KofnTraining(object):
 
     def sorted_values_across_worlds(self, rewards):
         return [
-            sorted_values_across_worlds(
-                learner.policy(self.next_input()), rewards)
-            for learner in self.learners
+            sorted_values_across_worlds(learner.policy(self.next_input()),
+                                        rewards) for learner in self.learners
         ]
 
     def utility(self, learner, rewards):
-        return utility(learner.policy(self.next_input()), rewards)
+        return rrm.utility(learner.policy(self.next_input()), rewards)
 
     def value_slopes_and_biases(self, arms_with_contexts):
         test_rewards = [
-            arms_with_contexts.with_function_outside_plateaus(lambda _: i)
-            .combined_raw_y() for i in range(2)
+            arms_with_contexts.with_function_outside_plateaus(
+                lambda _: i).combined_raw_y() for i in range(2)
         ]
         slopes_and_biases = []
         for learner in self.learners:
@@ -292,11 +286,10 @@ class KofnTrainingResults(object):
         return cls(competitor.rep, competitor.policy_model, training_data)
 
     @classmethod
-    def load(cls, name, policy_model=RrmPolicyModel):
-        return cls(
-            RepresentationWithFixedInputs.load('{}.rep'.format(name)),
-            policy_model.load('{}.policy_model'.format(name)),
-            KofnTrainingData.load('{}.training_data'.format(name)))
+    def load(cls, name, policy_model):
+        return cls(RepresentationWithFixedInputs.load('{}.rep'.format(name)),
+                   policy_model.load('{}.policy_model'.format(name)),
+                   KofnTrainingData.load('{}.training_data'.format(name)))
 
     def __init__(self, rep, policy_model, training_data):
         self.rep = rep

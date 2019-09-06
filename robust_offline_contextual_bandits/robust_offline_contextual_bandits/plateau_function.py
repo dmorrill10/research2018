@@ -3,7 +3,7 @@ import numpy as np
 import os
 from glob import glob
 from tf_supervised_inference.data import Data, NamedDataSets
-from tf_contextual_prediction_with_expert_advice import utility
+from research2018 import rrm
 
 from robust_offline_contextual_bandits.data import DataComponentsForTraining
 
@@ -19,8 +19,8 @@ def slope_and_bias_across_constants_for_unknown_outputs(
         f(x, outside_plateaus=lambda x: np.full([len(x)], float(i)))
         for f in plateau_functions
     ] for i in range(2)])
-    bias = tf.reduce_mean(utility(policy, test_rewards[0].T))
-    slope = tf.reduce_mean(utility(policy, test_rewards[1].T)) - bias
+    bias = tf.reduce_mean(rrm.utility(policy, test_rewards[0].T))
+    slope = tf.reduce_mean(rrm.utility(policy, test_rewards[1].T)) - bias
     return slope, bias
 
 
@@ -67,11 +67,12 @@ class PlateauFunction(object):
         if len(x.shape) < 2:
             x = np.expand_dims(x, 1)
         for i, (x_min, x_max) in enumerate(self.bounds):
-            x_in_bounds = np.logical_and(
-                np.all(x_min <= x, axis=-1), np.all(x <= x_max, axis=-1))
+            x_in_bounds = np.logical_and(np.all(x_min <= x, axis=-1),
+                                         np.all(x <= x_max, axis=-1))
             num_bounded_x = x_in_bounds.sum()
-            y[x_in_bounds] = np.random.normal(
-                self.heights[i], stddev, size=[num_bounded_x])
+            y[x_in_bounds] = np.random.normal(self.heights[i],
+                                              stddev,
+                                              size=[num_bounded_x])
         if outside_plateaus is None:
             return y[np.isfinite(y)]
         else:
@@ -88,19 +89,18 @@ class PlateauFunction(object):
             x = np.expand_dims(x, 1)
         in_bounds = np.full([len(x)], False)
         for i, (x_min, x_max) in enumerate(self.bounds):
-            np.logical_or(
-                in_bounds,
-                np.logical_and(
-                    np.all(x_min <= x, axis=-1), np.all(x <= x_max, axis=-1)),
-                out=in_bounds)
+            np.logical_or(in_bounds,
+                          np.logical_and(np.all(x_min <= x, axis=-1),
+                                         np.all(x <= x_max, axis=-1)),
+                          out=in_bounds)
         return in_bounds
 
     def for_training(self,
                      x,
                      stddev=0.0,
                      outside_plateaus=lambda x: np.zeros([len(x)])):
-        y = self(
-            np.squeeze(x), outside_plateaus=outside_plateaus).astype('float32')
+        y = self(np.squeeze(x),
+                 outside_plateaus=outside_plateaus).astype('float32')
 
         ge = self.in_bounds(x)
         be = np.logical_not(ge)
@@ -109,8 +109,8 @@ class PlateauFunction(object):
         bdata = Data(x[be], np.expand_dims(y[be], axis=1))
         data = NamedDataSets(good=gdata, bad=bdata)
 
-        noisy_y = np.expand_dims(
-            self(np.squeeze(x), stddev=stddev), axis=1).astype('float32')
+        noisy_y = np.expand_dims(self(np.squeeze(x), stddev=stddev),
+                                 axis=1).astype('float32')
 
         gdata = Data(x[ge], noisy_y[ge])
         bdata = Data(x[be], noisy_y[be])

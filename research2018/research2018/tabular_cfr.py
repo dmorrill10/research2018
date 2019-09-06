@@ -1,9 +1,7 @@
 import tensorflow as tf
 import numpy as np
 from tensorflow.python.ops.resource_variable_ops import ResourceVariable
-from tf_contextual_prediction_with_expert_advice import \
-    utility, \
-    normalized
+from research2018 import rrm
 
 
 def linear_avg_next_policy_sum(policy_sum, _cur, t):
@@ -36,8 +34,8 @@ def hedge_positive_projection_factory(temp=1.0):
 def poly_exp_approx(x, degree=1):
     if degree % 2 == 0:
         raise RuntimeError(
-            'Degree must be odd to ensure that sufficiently negative inputs yield non-positive outputs'
-        )
+            'Degree must be odd to ensure that sufficiently negative inputs '
+            'yield non-positive outputs')
     y = 1 + x
     z = 1
     for d in range(2, degree + 1):
@@ -52,8 +50,8 @@ def general_normal_hedge_dt_positive_projection(regrets, c, degree=-1):
     if degree > 0:
 
         def phi(v):
-            return poly_exp_approx(
-                tf.square(tf.nn.relu(v)) / (3 * (c + 1)), degree=degree)
+            return poly_exp_approx(tf.square(tf.nn.relu(v)) / (3 * (c + 1)),
+                                   degree=degree)
     else:
         max_rp1_squared = tf.square(
             tf.reduce_max(tf.nn.relu(rp1), axis=-1, keepdims=True))
@@ -78,8 +76,8 @@ class TabularCfrCurrent(object):
     def __init__(self, regrets):
         self.regrets = ResourceVariable(regrets)
         self._has_updated = False
-        self._policy = normalized(
-            self.positive_projection(self.regrets), axis=1)
+        self._policy = rrm.normalized(self.positive_projection(self.regrets),
+                                      axis=1)
 
     def positive_projection(self, v):
         return rm_positive_projection(v)
@@ -106,8 +104,9 @@ class TabularCfrCurrent(object):
 
     def policy(self):
         if tf.executing_eagerly() and self._has_updated:
-            self._policy = normalized(
-                self.positive_projection(self.regrets), axis=1)
+            self._policy = rrm.normalized(self.positive_projection(
+                self.regrets),
+                                          axis=1)
             self._has_updated = False
         return self._policy
 
@@ -115,7 +114,7 @@ class TabularCfrCurrent(object):
         return self.update_with_cfv(env(self.policy()), **kwargs)
 
     def update_with_cfv(self, cfv, rm_plus=False):
-        evs = utility(self.policy(), cfv)
+        evs = rrm.utility(self.policy(), cfv)
         regrets = cfv - evs
 
         r = self.regrets + regrets
@@ -136,9 +135,8 @@ class TabularCfrCurrent(object):
 class TabularAdaNormalHedgeCurrent(TabularCfrCurrent):
     @classmethod
     def zeros(cls, num_info_sets, num_actions, *args, **kwargs):
-        return cls(
-            tf.zeros([num_info_sets, num_actions]),
-            tf.zeros([num_info_sets, num_actions]), *args, **kwargs)
+        return cls(tf.zeros([num_info_sets, num_actions]),
+                   tf.zeros([num_info_sets, num_actions]), *args, **kwargs)
 
     @classmethod
     def load(cls, name):
@@ -159,19 +157,20 @@ class TabularAdaNormalHedgeCurrent(TabularCfrCurrent):
         super().__init__(regrets)
 
     def positive_projection(self, v):
-        return general_normal_hedge_dt_positive_projection(
-            v, self._counts, degree=self._degree)
+        return general_normal_hedge_dt_positive_projection(v,
+                                                           self._counts,
+                                                           degree=self._degree)
 
     def update_with_cfv(self, cfv, rm_plus=False):
-        evs = utility(self.policy(), cfv)
+        evs = rrm.utility(self.policy(), cfv)
         regrets = cfv - evs
 
         r = self.regrets + regrets
         if rm_plus:
             r = tf.nn.relu(r)
         self._has_updated = True
-        return evs, tf.group(
-            self.regrets.assign(r), self._counts.assign_add(tf.abs(regrets)))
+        return evs, tf.group(self.regrets.assign(r),
+                             self._counts.assign_add(tf.abs(regrets)))
 
     @property
     def variables(self):
@@ -186,15 +185,13 @@ class TabularCfr(object):
               *args,
               cur_cls=TabularCfrCurrent,
               **kwargs):
-        return cls(
-            cur_cls.zeros(num_info_sets, num_actions),
-            tf.zeros([num_info_sets, num_actions]), *args, **kwargs)
+        return cls(cur_cls.zeros(num_info_sets, num_actions),
+                   tf.zeros([num_info_sets, num_actions]), *args, **kwargs)
 
     @classmethod
     def load(cls, name, cur_cls=TabularCfrCurrent):
-        return cls(
-            cur_cls.load('{}.cur'.format(name)),
-            *np.load('{}.npy'.format(name)))
+        return cls(cur_cls.load('{}.cur'.format(name)),
+                   *np.load('{}.npy'.format(name)))
 
     def __init__(self, cur, policy_sum, t=0):
         self._cur = cur
@@ -235,7 +232,7 @@ class TabularCfr(object):
         return self._cur.policy
 
     def avg(self):
-        return normalized(self.policy_sum, axis=1)
+        return rrm.normalized(self.policy_sum, axis=1)
 
     def policy(self, mix_avg=1.0):
         use_cur = mix_avg < 1
@@ -259,12 +256,13 @@ class TabularCfr(object):
             avg = self.avg()
             policy = policy + mix_avg * avg
 
-        evs, update_current = self._cur.update_with_cfv(
-            env(policy), rm_plus=rm_plus)
+        evs, update_current = self._cur.update_with_cfv(env(policy),
+                                                        rm_plus=rm_plus)
         update_t = self.t.assign_add(1)
 
         if next_policy_sum is None:
-            next_policy_sum = linear_avg_next_policy_sum if rm_plus else uniform_avg_next_policy_sum
+            next_policy_sum = (linear_avg_next_policy_sum
+                               if rm_plus else uniform_avg_next_policy_sum)
 
         update_policy_sum = self.policy_sum.assign(
             next_policy_sum(self.policy_sum, cur,
