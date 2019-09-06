@@ -31,11 +31,11 @@ def with_fixed_dimensions(t,
     elif len(t.shape) < 2:
         return tf.expand_dims(t, axis=0)
     else:
-        num_columns = t.shape[-1].value
+        num_columns = t.shape[-1]
         num_dimensions = (
-            np.prod([t.shape[i].value for i in range(len(t.shape) - 1)])
+            np.prod([t.shape[i] for i in range(len(t.shape) - 1)])
             if len(t.shape) > 2 else
-            t.shape[0].value
+            t.shape[0]
         )  # yapf:disable
         if independent_dimensions:
             num_columns = num_dimensions * num_columns
@@ -346,7 +346,7 @@ class MaxRegretRegularizedSdaMixin(object):
         final_prox_weight = tf.math.div_no_nan(tf.math.sqrt(t),
                                                inverse_prox_weight)
 
-        if z.shape[0].value == 1: z = tile_to_dims(z, p.shape[0].value)
+        if z.shape[0] == 1: z = tile_to_dims(z, p.shape[0])
 
         weights = tf.maximum(
             -self.scales(),

@@ -59,10 +59,10 @@ class RepresentationWithFixedInputs(object):
         return self
 
     def num_examples(self):
-        return self.phi.shape[0].value
+        return self.phi.shape[0]
 
     def num_features(self):
-        return self.phi.shape[1].value
+        return self.phi.shape[1]
 
     def input_generator(self):
         yield self.phi

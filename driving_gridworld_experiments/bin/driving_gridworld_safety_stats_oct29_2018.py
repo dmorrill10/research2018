@@ -109,7 +109,7 @@ from tf_kofn_robust_policy_optimization.discounted_mdp import \
   dual_state_value_policy_evaluation_op
 
 from robust_offline_contextual_bandits.plotting import set_good_defaults
-from robust_offline_contextual_bandits.data import load_or_save, load_list
+from research2018.data import load_or_save, load_list
 from robust_offline_contextual_bandits.tf_np import reset_random
 
 from driving_gridworld_experiments import \
@@ -129,7 +129,7 @@ def new_road(headlight_range=3):
             Pedestrian(-1, -1, speed=1, prob_of_appearing=0.13)
         ],
         allowed_obstacle_appearance_columns=[{2}, {1}],
-        allow_crashing=False)
+        allow_crashing=True)
 
 
 """## Global Settings"""
@@ -143,17 +143,16 @@ os.system('ls')
 ## Static Definitions
 """
 
-discount = 0.99
 headlight_range = 3
 speed_limit = new_road(headlight_range=headlight_range).speed_limit()
 
 game = DrivingGridworld(
     lambda: new_road(headlight_range=headlight_range),
-    discount=discount,
+    discount=1.0,
     reward_function=lambda *args, **kwargs: 0)
 
 num_samples_per_cfr_iter = 10
-n = 1000
+n = 100
 num_reward_functions = n * num_samples_per_cfr_iter
 num_train_and_test_reward_functions = 2 * num_reward_functions
 
@@ -171,8 +170,8 @@ with reward_function_dist_timer:
     transitions_tensor, rfd_list, state_indices = game.road.tabulate(
         random_reward_function, print_every=100)
     transitions_tensor = tf.stack(transitions_tensor)
-    num_states = transitions_tensor.shape[0].value
-    num_actions = transitions_tensor.shape[1].value
+    num_states = transitions_tensor.shape[0]
+    num_actions = transitions_tensor.shape[1]
 
     rfd_tensor = tf.stack(rfd_list)
     reward_dataset = rfd_tensor[:, :, :num_reward_functions]
@@ -184,8 +183,8 @@ print(reward_dataset.shape)
 print(test_reward_dataset.shape)
 print(reward_function_dist_timer)
 
-num_states = transitions_tensor.shape[0].value
-num_actions = transitions_tensor.shape[1].value
+num_states = transitions_tensor.shape[0]
+num_actions = transitions_tensor.shape[1]
 num_states
 
 root_probs_tf = tf.one_hot(
@@ -200,28 +199,38 @@ sa_safety_info = tf.transpose(
     tf.reduce_sum(
         sasp_safety_info * tf.expand_dims(transitions_tensor, axis=-1),
         axis=2), [2, 0, 1])
-sa_safety_info.shape
+print(sa_safety_info.shape)
 """## k-of-n Policies
 
 ### Imports and Definitions
 """
 
-_n = 400
+_n = 40
 ks = list(range(_n // 10, _n + 1, _n // 10))
+# ks = [20]
 # ks = [1] + list(range(n // 10, n, n // 10)) + [n]
 kofn_opponents = [deterministic_kofn_weights(k, n) for k in ks]
 print(len(ks))
 ks
 
-print_every = 100
+print_every = 10
 use_plus = True
 mix_avg = 0.0
-num_iterations = 5000
+num_iterations = 1000
 
 assert root_probs_tf is not None
 assert transitions_tensor is not None
 
 num_state_actions = num_states * num_actions
+
+discount = tf.expand_dims(
+    tf.where(
+        tf.greater(sa_safety_info[0, :, -1], 0), tf.fill([num_states], 0.99),
+        tf.zeros([num_states])), -1)
+
+print(np.where(sasp_safety_info[:, -1, :, 0] > 0))
+
+exit()
 
 
 def fixed_reward_env(kofn_opponent):
@@ -230,8 +239,10 @@ def fixed_reward_env(kofn_opponent):
         v = dual_state_value_policy_evaluation_op(
             transitions_tensor, policy, reward_dataset, gamma=discount)
         '''state X action X world'''
-        q = tf.transpose(reward_dataset + tf.tensordot(
-            discount * v, transitions_tensor, axes=[-1, -1]), [1, 2, 0])
+        q = tf.transpose(
+            reward_dataset +
+            discount * tf.tensordot(v, transitions_tensor, axes=[-1, -1]),
+            [1, 2, 0])
         v = tf.transpose(v)
 
         offset = 0
@@ -278,6 +289,8 @@ def fixed_reward_test_env(kofn_opponent):
 
 
 with tf.Session() as sess:
+
+    print('Discounts: {}'.format(str(sess.run(discount))))
 
     @load_list
     def load_learners():
@@ -404,20 +417,21 @@ with tf.Session() as sess:
         kofn_safety_info = np.array(
             sess.run([
                 tf.reduce_sum(
-                    (tf.expand_dims(root_probs_tf, axis=0
-                                    ) * dual_state_value_policy_evaluation_op(
-                                        transitions_tensor,
-                                        learner.policy(),
-                                        sa_safety_info,
-                                        gamma=discount)),
-                    axis=-1) * (1.0 - discount) for learner in learners
+                    (tf.expand_dims(root_probs_tf, axis=0) *
+                     (1.0 - tf.transpose(discount)) *
+                     dual_state_value_policy_evaluation_op(
+                         transitions_tensor,
+                         learner.policy(),
+                         sa_safety_info,
+                         gamma=discount)),
+                    axis=-1) for learner in learners
             ]))
     print(timer)
 print(kofn_safety_info.shape)
 kofn_safety_info
 
-(kofn_wall_collisions, kofn_pedestrians, kofn_bumps, kofn_ditch,
- kofn_speeds, kofn_progress, kofn_lane_changes) = [
+(kofn_wall_collisions, kofn_pedestrians, kofn_bumps, kofn_ditch, kofn_speeds,
+ kofn_progress, kofn_lane_changes) = [
      kofn_safety_info[:, j] for j in range(kofn_safety_info.shape[1])
  ]
 kofn_bumps = kofn_bumps / 0.5

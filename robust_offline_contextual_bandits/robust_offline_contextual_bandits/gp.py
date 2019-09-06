@@ -22,11 +22,11 @@ class MultivariateNormalSampler(object):
         self.scale_triu = tf.transpose(tf.cholesky(cov))
 
     def sample(self, n=1):
-        return (self.mu + tf.random_normal(shape=[n, self.mu.shape[1].value])
+        return (self.mu + tf.random_normal(shape=[n, self.mu.shape[1]])
                 @ self.scale_triu)
 
     def num_outputs(self):
-        return self.mu.shape[1].value
+        return self.mu.shape[1]
 
 
 class GpAtInputs(object):

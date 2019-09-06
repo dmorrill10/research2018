@@ -2,7 +2,7 @@ import tensorflow as tf
 
 
 def rm_policy(regrets):
-    num_actions = regrets.shape[1].value
+    num_actions = regrets.shape[1]
     qregrets = tf.maximum(regrets, 0.0)
     z = tf.tile(
         tf.reduce_sum(qregrets, axis=1, keepdims=True), [1, num_actions])
@@ -20,7 +20,7 @@ def rrm_utilities(model, contexts, action_utilities):
 
 def rrm_loss(model, contexts, action_utilities):
     regrets = model(contexts)
-    num_actions = regrets.shape[1].value
+    num_actions = regrets.shape[1]
     policy = rm_policy(regrets)
 
     inst_regret = tf.stop_gradient(

@@ -93,11 +93,11 @@ class UrdcKofnTabularCfr(KofnCfr):
     @classmethod
     def train_env(cls, root_probs, transitions, reward_dataset, discount,
                   kofn_opponent):
-        num_samples = reward_dataset.shape[0].value
-        n = reward_dataset.shape[1].value
+        num_samples = reward_dataset.shape[0]
+        n = reward_dataset.shape[1]
         transitions = tf.convert_to_tensor(transitions)
-        num_states = transitions.shape[0].value
-        num_actions = transitions.shape[1].value
+        num_states = transitions.shape[0]
+        num_actions = transitions.shape[1]
         r = tf.reshape(reward_dataset,
                        [num_samples * n, num_states, num_actions])
 
@@ -130,11 +130,11 @@ class UrdcKofnTabularCfr(KofnCfr):
     @classmethod
     def test_env(cls, root_probs, transitions, reward_dataset, discount,
                  kofn_opponent):
-        num_samples = reward_dataset.shape[0].value
-        n = reward_dataset.shape[1].value
+        num_samples = reward_dataset.shape[0]
+        n = reward_dataset.shape[1]
         transitions = tf.convert_to_tensor(transitions)
-        num_states = transitions.shape[0].value
-        num_actions = transitions.shape[1].value
+        num_states = transitions.shape[0]
+        num_actions = transitions.shape[1]
         r = tf.reshape(reward_dataset,
                        [num_samples * n, num_states, num_actions])
 
@@ -248,11 +248,11 @@ class TabularRoad(object):
 
     @property
     def num_reps(self):
-        return self.reward_dataset.shape[0].value
+        return self.reward_dataset.shape[0]
 
     @property
     def num_worlds(self):
-        return self.reward_dataset.shape[1].value
+        return self.reward_dataset.shape[1]
 
     @property
     def num_states(self):
@@ -260,7 +260,7 @@ class TabularRoad(object):
 
     @property
     def num_actions(self):
-        return self.transitions.shape[1].value
+        return self.transitions.shape[1]
 
     @property
     def num_state_actions(self):

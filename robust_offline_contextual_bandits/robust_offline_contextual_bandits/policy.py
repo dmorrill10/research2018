@@ -113,6 +113,6 @@ def max_robust_policy(inputs_known_on_each_action, rewards_on_known_inputs):
         return tf.where(
             tf.tile(
                 tf.expand_dims(rows_to_play_random, axis=-1),
-                [1, policy.shape[1].value]),
-            tf.fill(policy.shape, 1.0 / policy.shape[1].value), policy)
+                [1, policy.shape[1]]),
+            tf.fill(policy.shape, 1.0 / policy.shape[1]), policy)
     return policy

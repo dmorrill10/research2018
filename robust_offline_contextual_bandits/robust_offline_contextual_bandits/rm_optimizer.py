@@ -28,10 +28,10 @@ def rm(utility,
 
     c = tf.math.div_no_nan(tf.cast(scale, tf.float32), z)
 
-    if z.shape[0].value == 1: z = optimizers.tile_to_dims(z, p.shape[0].value)
+    if z.shape[0] == 1: z = optimizers.tile_to_dims(z, p.shape[0])
     default = (
-        tf.zeros_like(z) if allow_negative or p.shape[0].value < 2
-        else tf.fill(z.shape, 1.0 / p.shape[0].value)
+        tf.zeros_like(z) if allow_negative or p.shape[0] < 2
+        else tf.fill(z.shape, 1.0 / p.shape[0])
     )  # yapf:disable
     return tf.where(tf.greater(z, 0), c * delta, default)
 
@@ -101,11 +101,11 @@ class RmBevL1VariableOptimizer(optimizers.StaticScaleMixin,
 
         c = tf.math.div_no_nan(scale, z)
 
-        if z.shape[0].value == 1:
-            z = optimizers.tile_to_dims(z, p.shape[0].value)
+        if z.shape[0] == 1:
+            z = optimizers.tile_to_dims(z, p.shape[0])
         default = (
-            tf.zeros_like(z) if allow_negative or p.shape[0].value < 2
-            else tf.fill(z.shape, 1.0 / p.shape[0].value)
+            tf.zeros_like(z) if allow_negative or p.shape[0] < 2
+            else tf.fill(z.shape, 1.0 / p.shape[0])
         )  # yapf:disable
         return tf.where(tf.greater(z, 0), c * delta, default)
 
