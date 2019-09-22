@@ -48,10 +48,11 @@ def poly_exp_approx(x, degree=1):
 def general_normal_hedge_dt_positive_projection(regrets, c, degree=-1):
     rp1 = regrets + 1.0
 
+    denominator = 3 * (c + 1)
     if degree > 0:
 
         def phi(v):
-            return poly_exp_approx(tf.square(tf.nn.relu(v)) / (3 * (c + 1)),
+            return poly_exp_approx(tf.square(tf.nn.relu(v)) / denominator,
                                    degree=degree)
     else:
         max_rp1_squared = tf.square(
@@ -59,7 +60,7 @@ def general_normal_hedge_dt_positive_projection(regrets, c, degree=-1):
 
         def phi(v):
             return tf.exp(
-                (tf.square(tf.nn.relu(v)) - max_rp1_squared) / (3 * (c + 1)))
+                (tf.square(tf.nn.relu(v)) - max_rp1_squared) / denominator)
 
     # Omit the 1/2 factor since it will be normalized away.
     return phi(rp1) - phi(regrets - 1.0)
