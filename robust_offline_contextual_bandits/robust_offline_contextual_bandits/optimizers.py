@@ -302,6 +302,12 @@ class GradEvBasedVariableOptimizer(VariableOptimizer):
         iev = self.instantaneous_ev(utility, scale=scale, descale=descale)
         return ev.assign_add((iev - ev) / t, use_locking=self._use_locking)
 
+    def avg_utility(self):
+        return self.get_slot('avg_utility')
+
+    def avg_ev(self):
+        return self.get_slot('avg_ev')
+
 
 class StaticScaleMixin(object):
     def __init__(self, *args, scale=1, fractional_scale=False, **kwargs):
@@ -315,18 +321,26 @@ class StaticScaleMixin(object):
 
 
 class MaxRegretRegularizedSdaMixin(object):
-    def __init__(self, *args, min_reg_param=1e-5, max_reg_param=10, **kwargs):
+    def __init__(self,
+                 *args,
+                 min_reg_param=1e-15,
+                 max_reg_param=1e15,
+                 **kwargs):
         super().__init__(*args, **kwargs)
         self._min_reg_param = float(min_reg_param)
         self._max_reg_param = float(max_reg_param)
 
     def dense_update(self, grad, num_updates=0):
         grad = self._with_fixed_dimensions(grad)
+
         t = tf.cast(num_updates + 1, tf.float32)
         utility = self.utility(grad, scale=self.scales(), t=t)
 
-        ev = self.updated_ev(utility, scale=self.scales(), t=t)
-        utility = self.updated_utility(utility, scale=self.scales(), t=t)
+        ev = self.updated_ev(utility, scale=self.scales(), t=t, descale=False)
+        utility = self.updated_utility(utility,
+                                       scale=self.scales(),
+                                       t=t,
+                                       descale=True)
 
         next_var = self._var.assign(tf.reshape(
             self.max_regret_regularized_sda(utility, ev, t), self._var.shape),
@@ -335,24 +349,20 @@ class MaxRegretRegularizedSdaMixin(object):
         return tf.group(next_var, utility, ev)
 
     def max_regret_regularized_sda(self, utility, ev, t):
-        p = tf.nn.relu(utility - ev)
-        d = tf.nn.relu(-utility - ev)
+        z = max_over_dims(tf.nn.relu(self.regret(utility, ev)))
+        prox_weight = tf.minimum(self._max_reg_param,
+                                 tf.maximum(self._min_reg_param, z))
 
-        z = tf.maximum(max_over_dims(p), max_over_dims(d))
+        # TODO: Not sure what the numerator should be here, but 1 seems way
+        # too small. tf.square(self.scales()) should be a lot like RM.
+        inverse_prox_weight = tf.math.divide_no_nan(tf.square(self.scales()),
+                                                    prox_weight)
 
-        inverse_prox_weight = tf.minimum(self._max_reg_param,
-                                         tf.maximum(self._min_reg_param, z))
+        weights = self.transform(inverse_prox_weight * utility)
+        if z.shape[0] == 1: z = tile_to_dims(z, weights.shape[0])
 
-        final_prox_weight = tf.math.divide_no_nan(tf.math.sqrt(t),
-                                                  inverse_prox_weight)
-
-        if z.shape[0] == 1: z = tile_to_dims(z, p.shape[0])
-
-        weights = tf.maximum(
-            -self.scales(),
-            tf.minimum(self.scales(), final_prox_weight * utility))
-
-        return tf.where(tf.greater(z, 0), weights, tf.zeros_like(z))
+        return tf.where(tf.greater(z, 0), weights,
+                        self.transform(tf.zeros_like(z)))
 
 
 class MaxRegretRegularizedSdaInfVariableOptimizer(MaxRegretRegularizedSdaMixin,
@@ -362,19 +372,32 @@ class MaxRegretRegularizedSdaInfVariableOptimizer(MaxRegretRegularizedSdaMixin,
     def __init__(self, *args, **kwargs):
         super().__init__(*args, independent_dimensions=True, **kwargs)
 
+    def transform(self, weights):
+        return tf.maximum(-self.scales(), tf.minimum(self.scales(), weights))
+
+    def regret(self, utility=None, ev=None):
+        if utility is None:
+            utility = self.avg_utility()
+        if ev is None:
+            ev = self.avg_ev()
+        return tf.abs(self.scales() * utility) - ev
+
 
 class MaxRegretRegularizedSdaNnVariableOptimizer(
         MaxRegretRegularizedSdaInfVariableOptimizer):
-    @property
-    def _matrix_var(self):
-        return super()._matrix_var - self.scales()
-
-    def max_regret_regularized_sda(self, *args, **kwargs):
-        return (super().max_regret_regularized_sda(*args, **kwargs) +
-                self.scales())
+    def transform(self, weights):
+        return tf.maximum(-self.scales(), tf.minimum(self.scales(),
+                                                     weights)) + self.scales()
 
     def scales(self):
         return super().scales() / 2.0
+
+    def regret(self, utility=None, ev=None):
+        if utility is None:
+            utility = self.avg_utility()
+        if ev is None:
+            ev = self.avg_ev()
+        return tf.nn.relu(2 * self.scales() * utility) - ev
 
 
 class CompositeOptimizer(optimizer.Optimizer):
