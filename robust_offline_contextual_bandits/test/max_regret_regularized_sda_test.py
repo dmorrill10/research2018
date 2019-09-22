@@ -3,16 +3,16 @@ import tensorflow as tf
 from robust_offline_contextual_bandits import optimizers
 
 
-class MySdaOptimizer(optimizers.CompositeOptimizer):
+class SdaNnOptimizer(optimizers.CompositeOptimizer):
     @classmethod
-    def new(cls, num_layers, scale=1.0):
+    def new(cls, num_variables=1, **kwargs):
         def new_vo_fn():
             return functools.partial(
-                optimizers.MaxRegretRegularizedSdaNnVariableOptimizer,
-                scale=scale,
-                utility_initializer=tf.zeros_initializer())
+                optimizers.MaxRegretRegularizedSdaInfVariableOptimizer,
+                utility_initializer=tf.zeros_initializer(),
+                **kwargs)
 
-        return cls.combine(*[new_vo_fn() for layer in range(num_layers)])
+        return cls.combine(*[new_vo_fn() for _ in range(num_variables)])
 
 
 class MaxRegretRegularizedSdaTest(tf.test.TestCase):
@@ -95,6 +95,87 @@ class MaxRegretRegularizedSdaTest(tf.test.TestCase):
             # print('')
 
         self.assertAlmostEqual(8183, regret_wrt_leader.numpy(), places=0)
+
+    def test_three_dimension_linear_realizable(self):
+        num_dimensions = 3
+        num_examples = 100
+        num_outputs = 2
+        x = tf.random.normal(shape=[num_examples, num_dimensions])
+        w_true = tf.random.normal(shape=[num_dimensions, 1])
+        b_true = tf.random.normal(shape=[1, num_outputs])
+        y = x @ w_true + b_true
+
+        w = tf.Variable(tf.zeros([num_dimensions, num_outputs]))
+        b = tf.Variable(tf.zeros([num_outputs]))
+
+        @tf.function
+        def y_hat(my_x):
+            return my_x @ w + b
+
+        def loss_fn(my_y, my_y_hat):
+            return tf.reduce_mean(tf.keras.losses.mse(my_y, my_y_hat) / 2.0)
+
+        optimizer = SdaNnOptimizer.new(num_variables=2, scale=10.)
+        optimizer.apply_gradients([(tf.zeros([]), w), (tf.zeros([]), b)])
+
+        self.assertAlmostEqual(0.576, loss_fn(y, y_hat(x)).numpy(), places=3)
+
+        num_updates = 0
+        x_losses = [2.1e-5, 2.8e-13]
+        for epoch in range(2):
+            for x_i, y_i in zip(x, y):
+                x_i = tf.expand_dims(x_i, 0)
+
+                with tf.GradientTape() as tape:
+                    loss = loss_fn(y_i, y_hat(x_i))
+                grad = tape.gradient(loss, [w, b])
+                optimizer.apply_gradients(zip(grad, [w, b]))
+                num_updates += 1
+
+            self.assertAlmostEqual(x_losses[epoch],
+                                   loss_fn(y, y_hat(x)).numpy(),
+                                   places=5)
+
+    def test_three_dimension_linear_random(self):
+        num_dimensions = 3
+        num_examples = 100
+        num_outputs = 2
+        x = tf.random.normal(shape=[num_examples, num_dimensions])
+        y = tf.random.normal(shape=[num_examples, num_outputs])
+
+        w = tf.Variable(tf.zeros([num_dimensions, num_outputs]))
+        b = tf.Variable(tf.zeros([num_outputs]))
+
+        @tf.function
+        def y_hat(my_x):
+            return my_x @ w + b
+
+        def loss_fn(my_y, my_y_hat):
+            return tf.reduce_mean(tf.keras.losses.mse(my_y, my_y_hat) / 2.0)
+
+        optimizer = SdaNnOptimizer.new(num_variables=2,
+                                       scale=2.,
+                                       min_reg_param=1.0)
+        optimizer.apply_gradients([(tf.zeros([]), w), (tf.zeros([]), b)])
+
+        self.assertAlmostEqual(0.464, loss_fn(y, y_hat(x)).numpy(), places=3)
+
+        num_updates = 0
+        x_losses = [0.446, 0.443]
+        for epoch in range(2):
+            for x_i, y_i in zip(x, y):
+                x_i = tf.expand_dims(x_i, 0)
+
+                with tf.GradientTape() as tape:
+                    loss = loss_fn(y_i, y_hat(x_i))
+                grad = tape.gradient(loss, [w, b])
+                optimizer.apply_gradients(zip(grad, [w, b]))
+                num_updates += 1
+
+            # print(loss_fn(y, y_hat(x)).numpy())
+            self.assertAlmostEqual(x_losses[epoch],
+                                   loss_fn(y, y_hat(x)).numpy(),
+                                   places=3)
 
 
 if __name__ == '__main__':
