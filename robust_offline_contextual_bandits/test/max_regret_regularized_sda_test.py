@@ -28,9 +28,7 @@ class MaxRegretRegularizedSdaTest(tf.test.TestCase):
             return tf.reduce_mean(tf.keras.losses.mse(my_y, my_y_hat) / 2.0)
 
         optimizer = optimizers.MaxRegretRegularizedSdaNnVariableOptimizer(
-            y_hat,
-            scale=100.0,
-            utility_initializer=tf.zeros_initializer())
+            y_hat, scale=100.0, utility_initializer=tf.zeros_initializer())
         optimizer.dense_update(tf.zeros([]))
 
         num_updates = 0
@@ -68,9 +66,7 @@ class MaxRegretRegularizedSdaTest(tf.test.TestCase):
             return tf.reduce_mean(tf.keras.losses.mse(my_y, my_y_hat) / 2.0)
 
         optimizer = optimizers.MaxRegretRegularizedSdaNnVariableOptimizer(
-            y_hat,
-            scale=100.0,
-            utility_initializer=tf.zeros_initializer())
+            y_hat, scale=100.0, utility_initializer=tf.zeros_initializer())
         optimizer.dense_update(tf.zeros([]))
 
         num_updates = 0
