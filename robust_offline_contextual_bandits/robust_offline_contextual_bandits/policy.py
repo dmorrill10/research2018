@@ -1,7 +1,7 @@
 import numpy as np
 import tensorflow as tf
 import tf_contextual_prediction_with_expert_advice as cpea
-from robust_offline_contextual_bandits.tf_np import logical_or
+from research2018.tf_np import logical_or
 
 
 def sorted_values_across_worlds(policy, sampled_rewards):

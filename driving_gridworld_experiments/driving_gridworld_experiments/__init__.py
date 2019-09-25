@@ -31,7 +31,7 @@ from research2018.data import load_list
 from robust_offline_contextual_bandits.plotting import \
     tableu20_color_table, \
     line_style_table
-from robust_offline_contextual_bandits.tf_np import reset_random
+from research2018.tf_np import reset_random
 
 import matplotlib.pyplot as plt
 

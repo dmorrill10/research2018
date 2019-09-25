@@ -110,7 +110,7 @@ from tf_kofn_robust_policy_optimization.discounted_mdp import \
 
 from robust_offline_contextual_bandits.plotting import set_good_defaults
 from research2018.data import load_or_save, load_list
-from robust_offline_contextual_bandits.tf_np import reset_random
+from research2018.tf_np import reset_random
 
 from driving_gridworld_experiments import \
   UncertainRewardDiscountedContinuingKofnTabularCfr, \
