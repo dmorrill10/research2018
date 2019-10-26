@@ -12,6 +12,10 @@ class MaxRegretRegularizedSdaMixin(object):
         self._min_reg_param = float(min_reg_param)
         self._max_reg_param = float(max_reg_param)
 
+    @tf.function
+    def _update_var(self, weights):
+        return self._var.assign(weights, use_locking=self._use_locking)
+
     def dense_update(self, grad, num_updates=0):
         grad = self._with_fixed_dimensions(grad)
 
@@ -24,9 +28,9 @@ class MaxRegretRegularizedSdaMixin(object):
                                        t=t,
                                        descale=True)
 
-        next_var = self._var.assign(tf.reshape(
-            self.max_regret_regularized_sda(utility, ev, t), self._var.shape),
-                                    use_locking=self._use_locking)
+        next_var = self._update_var(
+            tf.reshape(self.max_regret_regularized_sda(utility, ev, t),
+                       self._var.shape))
 
         return tf.group(next_var, utility, ev)
 
@@ -44,7 +48,7 @@ class MaxRegretRegularizedSdaMixin(object):
         weights = self.transform(inverse_prox_weight * utility)
         if z.shape[0] == 1: z = optimizers.tile_to_dims(z, weights.shape[0])
 
-        return tf.where(tf.greater(z, 0), weights,
+        return tf.where(tf.greater(z, 0.), weights,
                         self.transform(tf.zeros_like(z)))
 
 
@@ -58,7 +62,6 @@ class MaxRegretRegularizedSdaInfVariableOptimizer(
     def transform(self, weights):
         return optimizers.clip_by_value(weights, -self.scales(), self.scales())
 
-    @tf.function
     def regret(self, utility=None, ev=None):
         if utility is None:
             utility = self.avg_utility()
@@ -75,6 +78,7 @@ class MaxRegretRegularizedSdaNnVariableOptimizer(
             optimizers.clip_by_value(weights, -self.scales(), self.scales()) +
             self.scales())
 
+    @tf.function
     def scales(self):
         return super().scales() / 2.0
 
@@ -93,11 +97,11 @@ class MaxRegretRegularizedSdaL2VariableOptimizer(
     @tf.function
     def transform(self, weights):
         squared_norm = optimizers.sum_over_dims(tf.square(weights))
-        return tf.where(tf.greater(squared_norm, 0.0),
-                        self.scales() * weights / tf.sqrt(squared_norm),
+        norm = tf.where(tf.greater(squared_norm, 0.0), tf.sqrt(squared_norm),
                         tf.zeros_like(squared_norm))
+        return tf.where(tf.greater(norm, self.scales()),
+                        weights * (self.scales() / norm), weights)
 
-    @tf.function
     def regret(self, utility=None, ev=None):
         if utility is None:
             utility = self.avg_utility()
