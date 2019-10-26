@@ -33,8 +33,8 @@ class MaxRegretRegularizedSdaMixin(object):
     @tf.function
     def max_regret_regularized_sda(self, utility, ev, t):
         z = self.regret(utility, ev)
-        prox_weight = tf.minimum(self._max_reg_param,
-                                 tf.maximum(self._min_reg_param, z))
+        prox_weight = optimizers.clip_by_value(z, self._min_reg_param,
+                                               self._max_reg_param)
 
         # TODO: Not sure what the numerator should be here, but 1 seems way
         # too small. tf.square(self.scales()) should be a lot like RM.
