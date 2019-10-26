@@ -3,12 +3,7 @@ tf.compat.v1.enable_eager_execution()
 from tensorflow.python.ops.resource_variable_ops import ResourceVariable
 import numpy as np
 from robust_offline_contextual_bandits.optimizers import CompositeOptimizer
-from robust_offline_contextual_bandits.rm_optimizer import \
-    RmL1VariableOptimizer, \
-    RmInfVariableOptimizer, \
-    RmSimVariableOptimizer, \
-    RmNnVariableOptimizer, \
-    RmL1AmrrVariableOptimizer
+from robust_offline_contextual_bandits import rm_optimizers
 
 
 class RmOptimizerTest(tf.test.TestCase):
@@ -33,7 +28,8 @@ class RmOptimizerTest(tf.test.TestCase):
 
         loss = tf.reduce_mean(tf.keras.losses.mse(y, tf.matmul(x, w)))
         optimizer = CompositeOptimizer(
-            lambda var: RmL1AmrrVariableOptimizer(var, scale=1000.0),
+            lambda var: rm_optimizers.RmL1AmrrVariableOptimizer(var,
+                                                                scale=1000.0),
             var_list=[w])
 
         self.assertEqual(0.0, tf.reduce_sum(tf.abs(w)).numpy())
@@ -47,12 +43,13 @@ class RmOptimizerTest(tf.test.TestCase):
                 self.assertLess(loss.numpy(), 0.86844116)
         self.assertAlmostEqual(0.85839784, loss.numpy(), places=6)
 
-        # Compare this to RmL1VariableOptimizer:
+        # Compare this to rm_optimizers.RmL1VariableOptimizer:
         w = ResourceVariable(tf.zeros([num_dimensions, num_players]))
 
         loss = tf.reduce_mean(tf.keras.losses.mse(y, tf.matmul(x, w)))
         optimizer = CompositeOptimizer(
-            lambda var: RmL1VariableOptimizer(var, scale=1000.0), var_list=[w])
+            lambda var: rm_optimizers.RmL1VariableOptimizer(var, scale=1000.0),
+            var_list=[w])
 
         self.assertEqual(0.0, tf.reduce_sum(tf.abs(w)).numpy())
         self.assertAlmostEqual(0.86844116, loss.numpy(), places=6)
@@ -80,7 +77,7 @@ class RmOptimizerTest(tf.test.TestCase):
 
         loss = tf.reduce_mean(tf.keras.losses.mse(y, tf.matmul(x, w)))
         optimizer = CompositeOptimizer(
-            lambda var: RmInfVariableOptimizer(var, scale=0.8))
+            lambda var: rm_optimizers.RmInfVariableOptimizer(var, scale=0.8))
 
         self.assertEqual(0.0, tf.reduce_sum(tf.abs(w)).numpy())
         self.assertAlmostEqual(1.1386044, loss.numpy(), places=7)
@@ -104,7 +101,7 @@ class RmOptimizerTest(tf.test.TestCase):
 
         loss = tf.reduce_mean(tf.keras.losses.mse(tf.fill(w.shape, y), w))
         optimizer = CompositeOptimizer(
-            lambda var: RmNnVariableOptimizer(var, scale=1.0))
+            lambda var: rm_optimizers.RmNnVariableOptimizer(var, scale=1.0))
 
         self.assertAlmostEqual(y * y, loss.numpy())
         for i in range(20):
@@ -133,7 +130,7 @@ class RmOptimizerTest(tf.test.TestCase):
 
         loss = tf.reduce_mean(tf.keras.losses.mse(y, tf.matmul(x, w)))
         optimizer = CompositeOptimizer(
-            lambda var: RmSimVariableOptimizer(var, scale=1))
+            lambda var: rm_optimizers.RmSimVariableOptimizer(var, scale=1))
 
         self.assertEqual(0.0, tf.reduce_sum(tf.abs(w)).numpy())
         self.assertAlmostEqual(0.23852186, loss.numpy(), places=7)
@@ -155,7 +152,8 @@ class RmOptimizerTest(tf.test.TestCase):
 
         loss = tf.reduce_mean(w + max_value)
         optimizer = CompositeOptimizer(
-            lambda var: RmInfVariableOptimizer(var, scale=max_value))
+            lambda var: rm_optimizers.RmInfVariableOptimizer(var,
+                                                             scale=max_value))
 
         self.assertEqual(max_value, loss.numpy())
         with tf.GradientTape() as tape:
@@ -182,7 +180,7 @@ class RmOptimizerTest(tf.test.TestCase):
 
         loss = tf.reduce_mean(tf.keras.losses.mse(y, tf.matmul(x, w)))
         optimizer = CompositeOptimizer(
-            lambda var: RmL1VariableOptimizer(var, scale=1))
+            lambda var: rm_optimizers.RmL1VariableOptimizer(var, scale=1))
 
         self.assertEqual(0.0, tf.reduce_sum(tf.abs(w)).numpy())
         self.assertAlmostEqual(1.1386044, loss.numpy(), places=7)
@@ -212,7 +210,8 @@ class RmOptimizerTest(tf.test.TestCase):
 
         loss = tf.reduce_mean(tf.keras.losses.mse(y, tf.matmul(x, w)))
         optimizer = CompositeOptimizer(
-            lambda var: RmL1VariableOptimizer(var, scale=1.0), var_list=[w])
+            lambda var: rm_optimizers.RmL1VariableOptimizer(var, scale=1.0),
+            var_list=[w])
 
         self.assertEqual(0.0, tf.reduce_sum(tf.abs(w)).numpy())
         self.assertAlmostEqual(0.86844116, loss.numpy(), places=6)

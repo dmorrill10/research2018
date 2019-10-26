@@ -81,6 +81,7 @@ class RmBevL1VariableOptimizer(optimizers.StaticScaleMixin,
             init.append(max_gradient_norm.initializer)
         return tf.group(*init)
 
+    @tf.function
     def _next_matrix_var(self,
                          next_regret_up,
                          next_regret_down,
@@ -376,6 +377,7 @@ class RmNnVariableOptimizer(RmInfVariableOptimizer):
     def rm(self, *args, **kwargs):
         return super().rm(*args, **kwargs) + self.scales()
 
+    @tf.function
     def scales(self):
         return super().scales() / 2.0
 
