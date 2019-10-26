@@ -1,6 +1,7 @@
 import functools
 import tensorflow as tf
 from robust_offline_contextual_bandits import optimizers
+from robust_offline_contextual_bandits import sda_optimizers
 
 
 class SdaNnOptimizer(optimizers.CompositeOptimizer):
@@ -8,14 +9,14 @@ class SdaNnOptimizer(optimizers.CompositeOptimizer):
     def new(cls, num_variables=1, **kwargs):
         def new_vo_fn():
             return functools.partial(
-                optimizers.MaxRegretRegularizedSdaInfVariableOptimizer,
+                sda_optimizers.MaxRegretRegularizedSdaInfVariableOptimizer,
                 utility_initializer=tf.zeros_initializer(),
                 **kwargs)
 
         return cls.combine(*[new_vo_fn() for _ in range(num_variables)])
 
 
-class MaxRegretRegularizedSdaTest(tf.test.TestCase):
+class SdaOptimizersTest(tf.test.TestCase):
     def setUp(self):
         tf.random.set_seed(42)
 
@@ -27,7 +28,7 @@ class MaxRegretRegularizedSdaTest(tf.test.TestCase):
         def loss_fn(my_y, my_y_hat):
             return tf.reduce_mean(tf.keras.losses.mse(my_y, my_y_hat) / 2.0)
 
-        optimizer = optimizers.MaxRegretRegularizedSdaNnVariableOptimizer(
+        optimizer = sda_optimizers.MaxRegretRegularizedSdaNnVariableOptimizer(
             y_hat, scale=100.0, utility_initializer=tf.zeros_initializer())
         optimizer.dense_update(tf.zeros([]))
 
@@ -65,7 +66,7 @@ class MaxRegretRegularizedSdaTest(tf.test.TestCase):
         def loss_fn(my_y, my_y_hat):
             return tf.reduce_mean(tf.keras.losses.mse(my_y, my_y_hat) / 2.0)
 
-        optimizer = optimizers.MaxRegretRegularizedSdaNnVariableOptimizer(
+        optimizer = sda_optimizers.MaxRegretRegularizedSdaNnVariableOptimizer(
             y_hat, scale=100.0, utility_initializer=tf.zeros_initializer())
         optimizer.dense_update(tf.zeros([]))
 

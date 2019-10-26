@@ -11,14 +11,17 @@ def new_t_inv_gd_optimizer(learning_rate):
             learning_rate, tf.compat.v1.train.get_global_step(), 1, 1))
 
 
+@tf.function
 def sum_over_dims(t):
     return tf.reduce_sum(t, axis=0, keepdims=True)
 
 
+@tf.function
 def max_over_dims(t):
     return tf.reduce_max(t, axis=0, keepdims=True)
 
 
+@tf.function
 def tile_to_dims(t, num_dims):
     return tf.tile(t, [num_dims, 1])
 
@@ -41,6 +44,11 @@ def with_fixed_dimensions(t,
             num_columns = num_dimensions * num_columns
             num_dimensions = 1
         return tf.reshape(t, [num_dimensions, num_columns])
+
+
+@tf.function
+def clip_by_value(t, clip_value_min, clip_value_max):
+    return tf.maximum(clip_value_min, tf.minimum(clip_value_max, t))
 
 
 class VariableOptimizer(object):
@@ -92,6 +100,7 @@ class VariableOptimizer(object):
     def sparse_update(self, grad, num_updates=0):
         return self.dense_update(grad, num_updates)
 
+    @tf.function
     def instantaneous_ev(self, utility, scale=1.0, descale=True):
         iev = tf.reduce_sum(self._matrix_var * utility, axis=0, keepdims=True)
         if descale: iev = iev / scale
@@ -278,6 +287,7 @@ class GradEvBasedVariableOptimizer(VariableOptimizer):
         tf.summary.histogram('avg_ev', ev)
         return tf.group(utility.initializer, ev.initializer)
 
+    @tf.function
     def utility(self, grad, scale=1.0, descale=True, t=1):
         if self._clipvalue is not None:
             grad = tf.where(tf.greater(tf.abs(grad), self._clipvalue),
@@ -292,11 +302,13 @@ class GradEvBasedVariableOptimizer(VariableOptimizer):
             u = t * u
         return u
 
+    @tf.function
     def updated_utility(self, utility, scale=1.0, descale=True, t=1):
         cu = self.get_slot('avg_utility')
         if not descale: utility = scale * utility
         return cu.assign_add((utility - cu) / t, use_locking=self._use_locking)
 
+    @tf.function
     def updated_ev(self, utility, scale=1.0, descale=True, t=1):
         ev = self.get_slot('avg_ev')
         iev = self.instantaneous_ev(utility, scale=scale, descale=descale)
@@ -318,86 +330,6 @@ class StaticScaleMixin(object):
     def scales(self):
         return (self._scale *
                 self.num_rows() if self._fractional_scale else self._scale)
-
-
-class MaxRegretRegularizedSdaMixin(object):
-    def __init__(self,
-                 *args,
-                 min_reg_param=1e-15,
-                 max_reg_param=1e15,
-                 **kwargs):
-        super().__init__(*args, **kwargs)
-        self._min_reg_param = float(min_reg_param)
-        self._max_reg_param = float(max_reg_param)
-
-    def dense_update(self, grad, num_updates=0):
-        grad = self._with_fixed_dimensions(grad)
-
-        t = tf.cast(num_updates + 1, tf.float32)
-        utility = self.utility(grad, scale=self.scales(), t=t)
-
-        ev = self.updated_ev(utility, scale=self.scales(), t=t, descale=False)
-        utility = self.updated_utility(utility,
-                                       scale=self.scales(),
-                                       t=t,
-                                       descale=True)
-
-        next_var = self._var.assign(tf.reshape(
-            self.max_regret_regularized_sda(utility, ev, t), self._var.shape),
-                                    use_locking=self._use_locking)
-
-        return tf.group(next_var, utility, ev)
-
-    def max_regret_regularized_sda(self, utility, ev, t):
-        z = max_over_dims(tf.nn.relu(self.regret(utility, ev)))
-        prox_weight = tf.minimum(self._max_reg_param,
-                                 tf.maximum(self._min_reg_param, z))
-
-        # TODO: Not sure what the numerator should be here, but 1 seems way
-        # too small. tf.square(self.scales()) should be a lot like RM.
-        inverse_prox_weight = tf.math.divide_no_nan(tf.square(self.scales()),
-                                                    prox_weight)
-
-        weights = self.transform(inverse_prox_weight * utility)
-        if z.shape[0] == 1: z = tile_to_dims(z, weights.shape[0])
-
-        return tf.where(tf.greater(z, 0), weights,
-                        self.transform(tf.zeros_like(z)))
-
-
-class MaxRegretRegularizedSdaInfVariableOptimizer(MaxRegretRegularizedSdaMixin,
-                                                  StaticScaleMixin,
-                                                  GradEvBasedVariableOptimizer
-                                                  ):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, independent_dimensions=True, **kwargs)
-
-    def transform(self, weights):
-        return tf.maximum(-self.scales(), tf.minimum(self.scales(), weights))
-
-    def regret(self, utility=None, ev=None):
-        if utility is None:
-            utility = self.avg_utility()
-        if ev is None:
-            ev = self.avg_ev()
-        return tf.abs(self.scales() * utility) - ev
-
-
-class MaxRegretRegularizedSdaNnVariableOptimizer(
-        MaxRegretRegularizedSdaInfVariableOptimizer):
-    def transform(self, weights):
-        return tf.maximum(-self.scales(), tf.minimum(self.scales(),
-                                                     weights)) + self.scales()
-
-    def scales(self):
-        return super().scales() / 2.0
-
-    def regret(self, utility=None, ev=None):
-        if utility is None:
-            utility = self.avg_utility()
-        if ev is None:
-            ev = self.avg_ev()
-        return tf.nn.relu(2 * self.scales() * utility) - ev
 
 
 class CompositeOptimizer(optimizer.Optimizer):
