@@ -94,9 +94,6 @@ class VariableOptimizer(object):
     def get_slot(self, name):
         return self._slots[name]
 
-    def name_scope(self):
-        return tf.name_scope(self.name + '/')
-
     def sparse_update(self, grad, num_updates=0):
         return self.dense_update(grad, num_updates)
 
@@ -274,8 +271,7 @@ class GradEvBasedVariableOptimizer(VariableOptimizer):
         self._clipvalue = clipvalue
         self._use_linear_weight = use_linear_weight
         super(GradEvBasedVariableOptimizer, self).__init__(*args, **kwargs)
-        with self.name_scope():
-            self.initializer = self._create_slots()
+        self.initializer = self._create_slots()
 
     def _create_slots(self):
         utility = self._get_or_make_slot(self._utility_initializer(self.shape),
@@ -327,9 +323,12 @@ class StaticScaleMixin(object):
         self._fractional_scale = fractional_scale
         super(StaticScaleMixin, self).__init__(*args, **kwargs)
 
+    @tf.function
     def scales(self):
-        return (self._scale *
-                self.num_rows() if self._fractional_scale else self._scale)
+        return tf.cast(
+            self._scale *
+            self.num_rows() if self._fractional_scale else self._scale,
+            tf.float32)
 
 
 class CompositeOptimizer(optimizer.Optimizer):
