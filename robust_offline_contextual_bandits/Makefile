@@ -18,6 +18,10 @@ test-cov: test
 testv: ARGS=-vs
 testv: test
 
+.PHONY: testd
+testd: ARGS=-vs --log-level DEBUG --log-cli-level DEBUG
+testd: test
+
 .PHONY: install
 install: requirements.txt
 	$(PIP) install -r requirements.txt $(ARGS)
