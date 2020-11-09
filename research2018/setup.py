@@ -8,7 +8,9 @@ setup(
     install_requires=[
         'setuptools >= 20.2.2',
         'tensorflow >= 2.0',
-        # 'tf-contextual_prediction_with_expert_advice',  # not on pip
+        # Not on pip:
+        # 'tf-contextual_prediction_with_expert_advice',
+        # 'tf-kofn_robust_policy_optimization',
     ],
     tests_require=['pytest', 'pytest-cov'],
     setup_requires=['pytest-runner'],
