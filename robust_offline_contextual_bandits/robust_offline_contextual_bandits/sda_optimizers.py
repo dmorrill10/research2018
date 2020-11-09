@@ -88,7 +88,7 @@ class MaxRegretRegularizedSdaNnVariableOptimizer(
         if ev is None:
             ev = self.avg_ev()
         return 2 * self.scales() * optimizers.sum_over_dims(
-            tf.nn.relu(utility)) - ev
+            tf.math.abs(utility)) - ev
 
 
 class MaxRegretRegularizedSdaL2VariableOptimizer(
